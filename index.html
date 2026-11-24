@@ -1,0 +1,1833 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#021b2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Caustics">
+<title>Water Caustics</title>
+<style>
+  :root{
+    --bg:#08080b; --panel:rgba(16,16,22,.86); --line:rgba(255,255,255,.08);
+    --text:#e9e7f0; --dim:#8c8a99; --accent:#7fe3f0; --track:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font:12px/1.3 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+  canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;object-fit:contain;background:#000;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+  #panel{position:fixed;top:12px;right:12px;bottom:12px;width:356px;display:flex;flex-direction:column;
+    background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border:1px solid var(--line);border-radius:14px;transition:transform .25s ease,opacity .25s;z-index:5}
+  #panel.hidden{transform:translateX(calc(100% + 24px));opacity:0;pointer-events:none}
+  header{padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+  header h1{margin:0 0 8px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  button,select{font:inherit;color:var(--text);background:rgba(255,255,255,.06);border:1px solid var(--line);
+    border-radius:8px;padding:6px 9px;cursor:pointer}
+  button:hover,select:hover{background:rgba(255,255,255,.12)}
+  button.primary{background:var(--accent);color:#03181d;border-color:transparent;font-weight:600}
+  button.rec{background:#ff4d6d;color:#fff;border-color:transparent}
+  select{appearance:none;padding-right:22px;background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);
+    background-position:calc(100% - 12px) 52%,calc(100% - 8px) 52%;background-size:4px 4px;background-repeat:no-repeat}
+  select option{background:#16161d}
+  #sections{flex:1;overflow-y:auto;padding:4px 10px 10px;scrollbar-width:thin}
+  details{border-bottom:1px solid var(--line);padding:4px 0}
+  summary{cursor:pointer;list-style:none;padding:8px 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);user-select:none}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"▸";display:inline-block;width:14px;transition:transform .15s}
+  details[open] summary::before{transform:rotate(90deg)}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 2px;padding:2px 0 8px}
+  .knob{display:flex;flex-direction:column;align-items:center;cursor:ns-resize;touch-action:none;user-select:none;outline:none;border-radius:10px;padding:2px 0}
+  .knob:focus-visible{background:rgba(255,255,255,.06)}
+  .knob svg{width:52px;height:52px;overflow:visible}
+  .knob .track{fill:none;stroke:var(--track);stroke-width:4;stroke-linecap:round}
+  .knob .val{fill:none;stroke:var(--accent);stroke-width:4;stroke-linecap:round}
+  .knob .cap{fill:#1d1c26;stroke:rgba(255,255,255,.12)}
+  .knob .tick{stroke:var(--text);stroke-width:2;stroke-linecap:round}
+  .knob .kv{font-variant-numeric:tabular-nums;font-size:11px;margin-top:-2px}
+  .knob .kl{font-size:10px;color:var(--dim);text-align:center;letter-spacing:.03em}
+  .swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:4px 2px 10px}
+  .sw{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--dim)}
+  .sw input{width:100%;height:30px;border:1px solid var(--line);border-radius:8px;padding:0;background:none;cursor:pointer}
+  .sw input::-webkit-color-swatch-wrapper{padding:0}.sw input::-webkit-color-swatch{border:none;border-radius:7px}
+  #gradPreview{height:10px;border-radius:5px;margin:0 2px 8px}
+  footer{border-top:1px solid var(--line);padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px}
+  .scrub{display:flex;align-items:center;gap:8px}
+  .scrub input{flex:1;accent-color:var(--accent)}
+  .stat{font-variant-numeric:tabular-nums;color:var(--dim);min-width:72px;text-align:right}
+  #toggle{position:fixed;top:12px;right:12px;z-index:4;width:36px;height:36px;padding:0;font-size:16px;background:var(--panel);backdrop-filter:blur(8px)}
+  #fsFloat{position:fixed;top:12px;right:56px;z-index:4;width:36px;height:36px;padding:0;font-size:16px;background:var(--panel);backdrop-filter:blur(8px)}
+  #camPreview{position:fixed;left:12px;bottom:12px;width:256px;height:192px;border-radius:10px;border:1px solid var(--line);display:none;z-index:3;background:#000}
+  .camCtl{display:flex;flex-direction:column;gap:8px;padding:2px 2px 10px}
+  .camCtl select{flex:1;min-width:0}
+  .camCtl label{display:flex;align-items:center;gap:5px;color:var(--dim);font-size:11px;cursor:pointer}
+  .camCtl input[type=checkbox]{accent-color:var(--accent)}
+  #camStatus{color:var(--dim);font-size:10.5px;line-height:1.4;min-height:2.8em}
+  .hint{color:var(--dim);font-size:10px}
+  #err{position:fixed;left:16px;bottom:16px;max-width:60ch;color:#ffb3c1;white-space:pre-wrap;font:11px ui-monospace,monospace}
+  @media (pointer:coarse){
+    button,select{min-height:36px;padding:8px 11px}
+    .knob svg{width:58px;height:58px}
+    #toggle,#fsFloat{width:44px;height:44px;top:calc(10px + env(safe-area-inset-top))}
+    #toggle{right:calc(10px + env(safe-area-inset-right))}
+    #fsFloat{right:calc(62px + env(safe-area-inset-right))}
+  }
+  @media (max-width:640px){
+    #panel{top:auto;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:62vh;max-height:62dvh}
+    .grid{grid-template-columns:repeat(4,1fr)}
+    .swatches{grid-template-columns:repeat(3,1fr)}
+    header .row button,header .row select{flex:1 1 auto}
+    #panel.hidden{transform:translateY(calc(100% + 24px))}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="toggle" title="Show controls (H)">☰</button>
+<button id="fsFloat" class="fsBtn" title="Fullscreen (F)">⛶</button>
+
+<aside id="panel">
+  <header>
+    <h1>Water Caustics</h1>
+    <div class="row">
+      <select id="preset" title="Presets"></select>
+      <button id="randomize" title="Randomize (R)">Randomize</button>
+      <button id="reset">Reset</button>
+      <button id="copy" title="Copy settings JSON">Copy</button>
+      <button id="paste" title="Paste settings JSON">Paste</button>
+      <button id="fs" class="fsBtn" title="Fullscreen (F)">⛶ Fullscreen</button>
+      <button id="hide" title="Hide (H)">✕</button>
+    </div>
+  </header>
+  <div id="sections"></div>
+  <footer>
+    <div class="scrub">
+      <button id="play" style="width:34px">❚❚</button>
+      <input id="phase" type="range" min="0" max="1" step="0.001" value="0" title="Loop position">
+      <span class="stat" id="stat">—</span>
+    </div>
+    <div class="row">
+      <button id="png">Save PNG</button>
+      <select id="recSize" title="Recording size">
+        <option value="window">Window size</option>
+        <option value="1080x1080">1080 × 1080</option>
+        <option value="1920x1080">1920 × 1080</option>
+        <option value="1080x1920">1080 × 1920</option>
+        <option value="2160x2160">2160 × 2160</option>
+      </select>
+      <button id="rec" class="primary">● Record loop</button>
+    </div>
+    <div class="hint">Drag dials up/down (Shift = fine) · wheel · double-click resets · Click-drag (or drag fingers) to move a hand through the water · Camera: people passing stir it, standing still switches to hands · Space pause · H hide · F fullscreen</div>
+  </footer>
+</aside>
+<canvas id="camPreview" width="256" height="192"></canvas>
+<div id="err"></div>
+
+<script>
+/* ============================================================
+   PARAMETERS — every dial is defined here
+   ============================================================ */
+const PARAMS = [
+  // section,      key,          label,         min,   max,  step,  default
+  ['Motion',      'duration',   'Loop sec',    2,     60,   0.5,   12  ],
+  ['Motion',      'cycles',     'Speed',       1,     8,    1,     2   ],
+  ['Motion',      'flow',       'Evolve',      0,     3,    0.01,  0.7 ],
+  ['Motion',      'swirl',      'Swirl',       -3,    3,    1,     0   ],
+
+  ['Pattern',     'model',      'Cells↔Waves', 0,     1,    0.01,  0   ],
+  ['Pattern',     'scale',      'Scale',       0.3,   10,   0.01,  3.0 ],
+  ['Pattern',     'jitter',     'Wobble',      0,     1,    0.01,  0.8 ],
+  ['Pattern',     'layer',      'Layer 2',     0,     1,    0.01,  0.55],
+  ['Pattern',     'seed',       'Seed',        0,     99,   1,     7   ],
+
+  ['Waves',       'waves',      'Waves',       2,     32,   1,     18  ],
+  ['Waves',       'focus',      'Focus',       0,     4,    0.01,  1.2 ],
+  ['Waves',       'chop',       'Steepness',   0,     1,    0.01,  0.5 ],
+  ['Waves',       'wind',       'Direction',   0,     360,  1,     35  ],
+  ['Waves',       'spread',     'Spread',      0,     1,    0.01,  0.6 ],
+
+  ['Distortion',  'warp',       'Warp',        0,     3,    0.01,  0.7 ],
+  ['Distortion',  'warpScale',  'Warp scale',  0.1,   4,    0.01,  0.9 ],
+  ['Distortion',  'octaves',    'Octaves',     1,     6,    1,     3   ],
+  ['Distortion',  'gain',       'Roughness',   0.2,   0.8,  0.01,  0.5 ],
+
+  ['Light',       'width',      'Line width',  0.005, 0.4,  0.001, 0.07],
+  ['Light',       'sharp',      'Sharpness',   0.2,   6,    0.01,  2.0 ],
+  ['Light',       'intensity',  'Intensity',   0,     4,    0.01,  1.3 ],
+  ['Light',       'glow',       'Glow',        0,     1.5,  0.01,  0.4 ],
+  ['Light',       'disp',       'Dispersion',  0,     1,    0.01,  0.25],
+  ['Light',       'soft',       'Softness',    0,     1,    0.01,  0.3 ],
+  ['Light',       'shadow',     'Shadow',      0,     1,    0.01,  0.45],
+
+  ['Floor',       'depthGrad',  'Depth grad',  0,     1,    0.01,  0.5 ],
+  ['Floor',       'depthAngle', 'Depth angle', 0,     360,  1,     90  ],
+  ['Floor',       'patches',    'Patches',     0,     1,    0.01,  0.35],
+  ['Floor',       'refract',    'Refraction',  0,     1,    0.01,  0.5 ],
+  ['Floor',       'sand',       'Sand',        0,     1,    0.01,  0.25],
+  ['Floor',       'tiles',      'Tiles',       0,     1,    0.01,  0   ],
+  ['Floor',       'tileSize',   'Tile size',   0.03,  1,    0.005, 0.18],
+  ['Floor',       'grout',      'Grout',       0.005, 0.3,  0.001, 0.05],
+
+  ['Stir',        'stirForce', 'Force',       0,     3,    0.01,  1.0 ],
+  ['Stir',        'stirSize',  'Brush size',  0.01,  0.25, 0.001, 0.06],
+  ['Stir',        'stirCurl',  'Curl',        0,     2,    0.01,  0.7 ],
+  ['Stir',        'stirSpin',  'Click spin',  0,     3,    0.01,  1.0 ],
+  ['Stir',        'stirFlow',  'Glide',       0.9,   0.999,0.001, 0.985],
+  ['Stir',        'stirMemory','Memory',      0.98,  1,    0.0005,0.997],
+
+  ['Ripples',     'rippleAmp',  'Strength',    0,     3,    0.01,  1.0 ],
+  ['Ripples',     'rippleSpeed','Wave speed',  0.2,   3,    0.01,  0.7 ],
+  ['Ripples',     'rippleLife', 'Lifetime',    0.5,   20,   0.1,   5   ],
+  ['Ripples',     'rippleLens', 'Lens',        0,     3,    0.01,  1.0 ],
+  ['Ripples',     'rippleRefr', 'Refraction',  0,     3,    0.01,  1.0 ],
+  ['Ripples',     'rippleEdge', 'Edge bounce', 0,     1,    0.01,  0.3 ],
+  ['Ripples',     'rippleSize', 'Drop size',   0.2,   3,    0.01,  1.8 ],
+  ['Ripples',     'rain',       'Rain',        0,     1,    0.01,  0   ],
+
+  ['Hand in water','waterDrag', 'Drag water',  0,     2,    0.01,  0.7 ],
+  ['Hand in water','slosh',     'Slosh',       0,     3,    0.01,  1.0 ],
+  ['Hand in water','bow',       'Bow wave',    0,     3,    0.01,  0.7 ],
+  ['Hand in water','turb',      'Turbulence',  0,     3,    0.01,  0.15],
+  ['Hand in water','dimples',   'Vortex dents',0,     3,    0.01,  0.3 ],
+  ['Hand in water','settle',    'Settle',      0.9,   0.999,0.001, 0.98 ],
+
+  ['Camera',      'camSens',   'Sensitivity', 0,     1,    0.01,  0.5 ],
+  ['Camera',      'camBody',   'Body force',  0,     3,    0.01,  1.0 ],
+  ['Camera',      'camHand',   'Hand force',  0,     3,    0.01,  1.2 ],
+  ['Camera',      'camHandSize','Hand size',  0.01,  0.25, 0.001, 0.07],
+  ['Camera',      'camStill',  'Still secs',  0.2,   5,    0.1,   1.2 ],
+  ['Camera',      'camLeft',   'Crop left',   0,     0.5,  0.005, 0   ],
+  ['Camera',      'camRight',  'Crop right',  0.5,   1,    0.005, 1   ],
+  ['Camera',      'camTop',    'Crop top',    0,     0.5,  0.005, 0   ],
+  ['Camera',      'camBottom', 'Crop bottom', 0.5,   1,    0.005, 1   ],
+
+  ['Finish',      'sheen',      'Sheen',       0,     1,    0.01,  0.3 ],
+  ['Finish',      'contrast',   'Contrast',    0.5,   2,    0.01,  1.05],
+  ['Finish',      'saturation', 'Saturation',  0,     2,    0.01,  1.0 ],
+  ['Finish',      'hue',        'Hue',         -180,  180,  1,     0   ],
+  ['Finish',      'grain',      'Grain',       0,     0.3,  0.001, 0.02],
+  ['Finish',      'vignette',   'Vignette',    0,     1,    0.01,  0.35],
+  ['Finish',      'res',        'Resolution',  0.25,  2,    0.05,  1   ],
+].map(([section,key,label,min,max,step,def]) => ({section,key,label,min,max,step,def}));
+
+const COLORS = [
+  {key:'deep',       label:'Deep',    def:'#021b2e'},
+  {key:'shallow',    label:'Shallow', def:'#0b6c86'},
+  {key:'groutColor', label:'Grout',   def:'#e8f4f2'},
+  {key:'caustic',    label:'Caustic', def:'#d9fbff'},
+  {key:'glowColor',  label:'Glow',    def:'#3fd0e0'},
+  {key:'highlight',  label:'Sheen',   def:'#ffffff'},
+];
+
+const PRESETS = {
+  'Lagoon':            {},
+  'Swimming Pool':     {deep:'#0a4f7a',shallow:'#2fb3d6',groutColor:'#0b2f4a',caustic:'#ffffff',glowColor:'#9fe8ff',
+                        model:1,tiles:0.85,tileSize:0.12,grout:0.06,focus:1.6,waves:24,sand:0,scale:4.5,patches:0.1,
+                        depthGrad:0.6,refract:0.7,intensity:1.1,glow:0.3},
+  'Tropical Shallows': {deep:'#0d6b6b',shallow:'#7fd6c2',caustic:'#fffbe6',glowColor:'#ffe9a8',
+                        sand:0.6,model:0.4,scale:3.5,intensity:1.0,shadow:0.3,patches:0.5},
+  'Abyss':             {deep:'#01060f',shallow:'#062a4a',caustic:'#7fc8ff',glowColor:'#1a5cff',
+                        intensity:0.9,glow:0.8,width:0.05,sharp:3,depthGrad:0.8,sand:0,vignette:0.6,scale:2,flow:1.0},
+  'Neon Reef':         {deep:'#0b0221',shallow:'#2a0b4d',caustic:'#ff7af5',glowColor:'#5ef2ff',
+                        disp:0.9,glow:0.5,intensity:1.3,sand:0,model:0.2},
+  'Molten Gold':       {deep:'#120700',shallow:'#3a1a04',caustic:'#ffd27a',glowColor:'#ff7a1a',highlight:'#ffe2b0',
+                        intensity:1.6,glow:0.6,disp:0.15,sharp:2.5,model:0.6,sand:0},
+  'Moonlit':           {deep:'#03050a',shallow:'#121a2a',caustic:'#e8eeff',glowColor:'#7a8cff',
+                        saturation:0.5,intensity:0.9,sand:0.3},
+  'Ripple Glass':      {deep:'#062530',shallow:'#1d6f80',caustic:'#f2ffff',glowColor:'#6fe3ff',
+                        model:1,focus:2.2,waves:28,chop:0.7,disp:0.5,sand:0,scale:2.2},
+};
+
+
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const defaults = {};
+PARAMS.forEach(p => defaults[p.key] = p.def);
+COLORS.forEach(c => defaults[c.key] = c.def);
+defaults.stirMode = 'water'; // 'water' | 'ripple' | 'ink' | 'off'
+Object.assign(defaults, {camOn: false, camDevice: '', camMirror: false, camFlipY: false, camHands: true, camPreview: true, camLowLight: true});
+// camera setup is about the room, not the look: keep it across presets / reset / paste
+const camKeys = () => Object.fromEntries(Object.entries(state).filter(([k]) => k.startsWith('cam')));
+let state = {...defaults};
+try { const s = JSON.parse(localStorage.getItem('waterCaustics') || 'null'); if (s) state = {...defaults, ...s}; } catch {}
+if (state.stirMode === 'on') state.stirMode = 'water';    // settings saved before the water modes existed
+const save = () => { try { localStorage.setItem('waterCaustics', JSON.stringify(state)); } catch {} };
+
+/* ============================================================
+   WEBGL
+   ============================================================ */
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', {preserveDrawingBuffer:true, antialias:false});
+const errBox = document.getElementById('err');
+if (!gl) errBox.textContent = 'WebGL2 is not available in this browser.';
+
+const VERT = `#version 300 es
+in vec2 aPos; void main(){ gl_Position = vec4(aPos,0.,1.); }`;
+
+const FRAG = `#version 300 es
+precision highp float;
+out vec4 outColor;
+uniform vec2  uRes;
+uniform float uPhase;
+uniform float u_cycles,u_flow,u_swirl,u_model,u_scale,u_jitter,u_layer,u_seed,
+              u_waves,u_focus,u_chop,u_wind,u_spread,
+              u_warp,u_warpScale,u_octaves,u_gain,
+              u_width,u_sharp,u_intensity,u_glow,u_disp,u_soft,u_shadow,
+              u_depthGrad,u_depthAngle,u_patches,u_refract,u_sand,u_tiles,u_tileSize,u_grout,
+              u_sheen,u_contrast,u_saturation,u_hue,u_grain,u_vignette;
+uniform vec3  u_deep,u_shallow,u_groutColor,u_caustic,u_glowColor,u_highlight;
+uniform sampler2D uDisp;     // fluid displacement map (sim texels) from click-drag stirring
+uniform vec2  uDispSize;
+uniform float uStirOn;
+uniform sampler2D uRip;      // ripple height field (R = height, G = vertical velocity), wave equation
+uniform vec2  uRipSize;
+uniform float uRipOn;
+uniform sampler2D uPhi;     // wave displacement potential: grad(phi) = how far the water has moved
+uniform float u_rippleLens,u_rippleRefr;
+
+const float TAU = 6.2831853;
+
+// B-spline bicubic sampling (4 bilinear taps) of the stir displacement map: C2-smooth, no texel grid.
+vec4 bspline(float v){
+  vec4 n = vec4(1.,2.,3.,4.) - v, s = n*n*n;
+  float x = s.x, y = s.y - 4.*s.x, z = s.z - 4.*s.y + 6.*s.x;
+  return vec4(x, y, z, 6. - x - y - z) * (1./6.);
+}
+vec2 textureBicubic(sampler2D t, vec2 uv, vec2 size){
+  uv = uv*size - .5;
+  vec2 f = fract(uv); uv -= f;
+  vec4 xc = bspline(f.x), yc = bspline(f.y);
+  vec4 c = uv.xxyy + vec2(-.5, 1.5).xyxy;
+  vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+  vec4 off = (c + vec4(xc.yw, yc.yw)/s) / size.xxyy;
+  vec2 s0 = texture(t, off.xz).xy, s1 = texture(t, off.yz).xy, s2 = texture(t, off.xw).xy, s3 = texture(t, off.yw).xy;
+  float sx = s.x/(s.x+s.y), sy = s.z/(s.z+s.w);
+  return mix(mix(s3, s2, sx), mix(s1, s0, sx), sy);
+}
+
+// ---- 4D simplex noise (Ashima Arts / Stefan Gustavson, MIT) ----
+vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+float mod289(float x){return x-floor(x*(1./289.))*289.;}
+vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
+float permute(float x){return mod289(((x*34.)+1.)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float taylorInvSqrt(float r){return 1.79284291400159-0.85373472095314*r;}
+vec4 grad4(float j, vec4 ip){
+  const vec4 ones=vec4(1.,1.,1.,-1.);
+  vec4 p,s;
+  p.xyz=floor(fract(vec3(j)*ip.xyz)*7.)*ip.z-1.;
+  p.w=1.5-dot(abs(p.xyz),ones.xyz);
+  s=vec4(lessThan(p,vec4(0.)));
+  p.xyz=p.xyz+(s.xyz*2.-1.)*s.www;
+  return p;
+}
+float snoise(vec4 v){
+  const vec4 C=vec4(0.138196601125011,0.276393202250021,0.414589803375032,-0.447213595499958);
+  vec4 i=floor(v+dot(v,vec4(0.309016994374947451)));
+  vec4 x0=v-i+dot(i,C.xxxx);
+  vec4 i0; vec3 isX=step(x0.yzw,x0.xxx); vec3 isYZ=step(x0.zww,x0.yyz);
+  i0.x=isX.x+isX.y+isX.z; i0.yzw=1.-isX;
+  i0.y+=isYZ.x+isYZ.y; i0.zw+=1.-isYZ.xy;
+  i0.z+=isYZ.z; i0.w+=1.-isYZ.z;
+  vec4 i3=clamp(i0,0.,1.), i2=clamp(i0-1.,0.,1.), i1=clamp(i0-2.,0.,1.);
+  vec4 x1=x0-i1+C.xxxx, x2=x0-i2+C.yyyy, x3=x0-i3+C.zzzz, x4=x0+C.wwww;
+  i=mod289(i);
+  float j0=permute(permute(permute(permute(i.w)+i.z)+i.y)+i.x);
+  vec4 j1=permute(permute(permute(permute(
+        i.w+vec4(i1.w,i2.w,i3.w,1.))
+      + i.z+vec4(i1.z,i2.z,i3.z,1.))
+      + i.y+vec4(i1.y,i2.y,i3.y,1.))
+      + i.x+vec4(i1.x,i2.x,i3.x,1.));
+  vec4 ip=vec4(1./294.,1./49.,1./7.,0.);
+  vec4 p0=grad4(j0,ip), p1=grad4(j1.x,ip), p2=grad4(j1.y,ip), p3=grad4(j1.z,ip), p4=grad4(j1.w,ip);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w; p4*=taylorInvSqrt(dot(p4,p4));
+  vec3 m0=max(.6-vec3(dot(x0,x0),dot(x1,x1),dot(x2,x2)),0.);
+  vec2 m1=max(.6-vec2(dot(x3,x3),dot(x4,x4)),0.);
+  m0=m0*m0; m1=m1*m1;
+  return 49.*(dot(m0*m0,vec3(dot(p0,x0),dot(p1,x1),dot(p2,x2)))+dot(m1*m1,vec2(dot(p3,x3),dot(p4,x4))));
+}
+
+// SEAMLESS LOOP: every moving part is periodic in uPhase.
+//  - warp noise: time travels around a circle in the noise's 3rd/4th dimensions
+//  - cell points: orbit their anchors an integer number of times per loop
+//  - waves: each one advances an integer number of wavelengths per loop
+//  - swirl: integer turns per loop
+vec2 gLoop;
+float fbm(vec2 p, float o){
+  float s=0., a=.5, f=1., n=0.;
+  for(int i=0;i<6;i++){
+    if(float(i)>=u_octaves) break;
+    float fi=float(i);
+    s += a*snoise(vec4(p*f + o, gLoop + vec2(o*.37 + fi*1.7, fi*3.1)));
+    n += a; a *= u_gain; f *= 2.03;
+  }
+  return s/n;
+}
+
+float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+vec4 hash4(vec2 p){
+  vec4 q = vec4(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)), dot(p,vec2(419.2,371.9)), dot(p,vec2(74.7,231.1)));
+  return fract(sin(q + u_seed*1.618)*43758.5453);
+}
+float vnoise(vec2 p){
+  vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+1.),f.x), f.y);
+}
+float fbm2(vec2 p){ float s=0., a=.5; for(int i=0;i<4;i++){ s+=a*vnoise(p); p=p*2.03+17.1; a*=.5; } return s/.9375; }
+vec3 hueRotate(vec3 c, float a){
+  const vec3 k=vec3(0.57735);
+  float ca=cos(a);
+  return c*ca + cross(k,c)*sin(a) + k*dot(k,c)*(1.-ca);
+}
+
+/* ---------- Model A: cellular caustics (Voronoi borders of orbiting points) ---------- */
+vec2 cellPoint(vec2 id, float ls){
+  vec4 h = hash4(id + ls);
+  float r = u_jitter*.38*(.35 + .65*h.w);
+  float n = u_cycles * (h.z < .5 ? 1. : 2.) * (fract(h.w*7.31) < .5 ? -1. : 1.);   // integer orbits/loop
+  float a = TAU*(uPhase*n + h.x);
+  vec2 c = mix(vec2(r + .06), vec2(.94 - r), fract(h.xy*13.7 + h.zw));
+  return c + r*vec2(cos(a), sin(a));
+}
+// exact distance to the nearest cell border (two-pass, after Inigo Quilez)
+float voroEdge(vec2 x, float ls){
+  vec2 n = floor(x), f = x - n, mg = vec2(0.), mr = vec2(0.);
+  float md = 8.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g = vec2(i,j), r = g + cellPoint(n+g, ls) - f;
+    float d = dot(r,r);
+    if(d<md){ md=d; mr=r; mg=g; }
+  }
+  md = 8.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g = mg + vec2(i,j), r = g + cellPoint(n+g, ls) - f;
+    if(dot(mr-r,mr-r) > 1e-5) md = min(md, dot(.5*(mr+r), normalize(r-mr)));
+  }
+  return md;
+}
+vec2 cellLayer(vec2 p, float ls){
+  float e = voroEdge(p, ls);
+  float fw = fwidth(e);
+  float line = pow(clamp(1. - max(e - fw*.5, 0.)/(u_width + fw), 0., 1.), u_sharp);
+  float glow = exp(-e/(u_width*4. + .02));
+  return vec2(line, glow);
+}
+vec2 cells(vec2 p){
+  vec2 a = cellLayer(p, 0.);
+  if(u_layer > 0.){
+    vec2 p2 = mat2(.62,-.78,.78,.62)*p*1.63 + 17.3;
+    a += cellLayer(p2, 31.)*u_layer*vec2(.8, .6);   // overlaps make the bright knots
+  }
+  return a;
+}
+
+/* ---------- Model B: physical refraction through a sum of travelling waves ----------
+   A light ray hitting the surface at x lands on the floor at P(x) = x + D*grad h(x).
+   Brightness = area compression = 1/|det J|, J = I + D*Hess h — computed analytically. */
+vec3 gRipH = vec3(0.);   // ripple curvature in pattern units: user ripples reshape the caustic lines
+void waves(vec2 x, out vec2 grad, out vec3 inten){
+  float Hxx=0., Hyy=0., Hxy=0.; grad = vec2(0.);
+  float base = radians(u_wind), norm = inversesqrt(u_waves);
+  for(int i=0;i<32;i++){
+    if(float(i)>=u_waves) break;
+    float fi = float(i);
+    vec4 h = hash4(vec2(fi*7.13 + 91.7, 3.7 + fi*1.31));
+    float ang = base + (h.x-.5)*3.14159*u_spread*2.;
+    float lam = mix(.3, 1.25, h.y*h.y);
+    float k = TAU/lam;
+    vec2 kv = k*vec2(cos(ang), sin(ang));
+    float n = max(1., floor(u_cycles*sqrt(1.25/lam) + .5));   // deep water: short waves run faster
+    float amp = u_chop*.09*lam*norm*(.6 + .8*h.w);
+    float th = dot(kv, x) - TAU*n*uPhase + TAU*h.z;
+    float s = sin(th), c = cos(th);
+    grad += amp*c*kv;
+    float as = -amp*s;
+    Hxx += as*kv.x*kv.x; Hyy += as*kv.y*kv.y; Hxy += as*kv.x*kv.y;
+  }
+  Hxx += gRipH.x; Hyy += gRipH.y; Hxy += gRipH.z;
+  vec3 D = u_focus*.24*(1. + u_disp*.22*vec3(-1.,0.,1.));      // dispersion: a different focus per channel
+  vec3 det = (1.+D*Hxx)*(1.+D*Hyy) - D*D*Hxy*Hxy;
+  float eps = .01 + u_soft*.12;
+  inten = inversesqrt(det*det + eps*eps);
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - .5*uRes) / uRes.y;
+  vec2 uv0 = uv;
+
+  // stirring: the surface the liquid has carried here, from x - D(x)
+  if (uStirOn > 0.) uv -= textureBicubic(uDisp, gl_FragCoord.xy / uRes, uDispSize) / uDispSize.y;
+
+  // ripples: slope + curvature of the simulated surface (in sim texels)
+  vec2 rg = vec2(0.); float rHxx = 0., rHyy = 0., rHxy = 0.;
+  if (uRipOn > 0.) {
+    vec2 ru = gl_FragCoord.xy / uRes, ex = vec2(1./uRipSize.x, 0.), ey = vec2(0., 1./uRipSize.y);
+    #define RH(o) textureBicubic(uRip, ru + (o), uRipSize).x
+    float hc = RH(vec2(0.)), hl = RH(-ex), hr = RH(ex), hb = RH(-ey), ht = RH(ey);
+    float hpp = RH(ex+ey), hpm = RH(ex-ey), hmp = RH(ey-ex), hmm = RH(-ex-ey);
+    rg = .5*vec2(hr - hl, ht - hb);
+    rHxx = hr + hl - 2.*hc; rHyy = ht + hb - 2.*hc; rHxy = .25*(hpp - hpm - hmp + hmm);
+    // the light pattern rides the waves: each passing crest shoves it out and back, like the
+    // water itself orbiting under the wave (soft-clamped so a fresh splash can't tear it)
+    // The pattern rides the waves the way water really moves: it gathers under crests and
+    // spreads under troughs. xi = grad(phi) with div(xi) = -h/depth (capped), so long swells
+    // carry the pattern visibly while it can never fold inside-out (no torn/mirrored patches).
+    #define PH(o) textureBicubic(uPhi, ru + (o), uRipSize).x
+    vec2 xi = 1.1*vec2(PH(ex) - PH(-ex), PH(ey) - PH(-ey)) / uRipSize.y;   // 2.2x: uses the safe margin, still no folds
+    uv -= xi;
+  }
+
+  float th = TAU*uPhase;
+  gLoop = vec2(cos(th), sin(th)) * u_flow;
+  float rot = th*u_swirl;
+  vec2 ruv = mat2(cos(rot),-sin(rot),sin(rot),cos(rot)) * uv;
+
+  vec2 p = ruv*u_scale + vec2(u_seed*13.17, -u_seed*7.31);
+
+  // slow, looping domain warp: the current that bends the whole net
+  vec2 wv = vec2(0.);
+  if (u_warp > 0.) { vec2 wp = ruv*u_warpScale*2. + u_seed*3.1; wv = vec2(fbm(wp, 0.), fbm(wp, 5.2)); }
+  vec2 q = p + u_warp*wv;
+
+  vec3 cl = vec3(0.), cg = vec3(0.);   // caustic line / glow, per colour channel
+  vec2 slope = vec2(0.);               // surface slope (refracts the floor, drives the sheen)
+
+  if (u_model < .999) {
+    float w = 1. - u_model;
+    vec2 g = cells(q);
+    vec3 L = vec3(g.x), G = vec3(g.y);
+    if (u_disp > 0.) {
+      vec2 dq = (wv*.12 + vec2(.035, .02))*u_disp;
+      vec2 gr = cells(q + dq), gb = cells(q - dq);
+      L = vec3(gr.x, g.x, gb.x); G = vec3(gr.y, g.y, gb.y);
+    }
+    cl += L*w; cg += G*w;
+    slope += (wv*.35 + vec2(dFdx(g.y), dFdy(g.y))*8.)*w*.5;
+  }
+  if (u_model > .001) {
+    float w = u_model;
+    vec2 grd; vec3 I;
+    gRipH = vec3(rHxx, rHyy, rHxy) * pow(uRipSize.y/u_scale, 2.) * u_rippleLens * .012;
+    waves(q, grd, I);
+    vec3 line = pow(max(I - 1., 0.)*(.06 + u_width*.3), vec3(u_sharp*.35 + .3));
+    vec3 glow = max(I - 1., 0.)/(I + 8.) * 1.4;
+    cl += line*w; cg += glow*w;
+    slope += grd*w*2.;
+  }
+
+  // ripples act as moving lenses: they gather light into bright rings and leave dark troughs
+  vec3 rI = vec3(1.);
+  if (uRipOn > 0.) {
+    vec3 F = u_rippleLens*520.*(1. + u_disp*.25*vec3(-1., 0., 1.));
+    vec3 det = (1. + F*rHxx)*(1. + F*rHyy) - F*F*rHxy*rHxy;
+    rI = inversesqrt(det*det + .005) * 1.0025;      // crisp: light focused by a crest becomes a sharp bright ring
+    cl *= mix(vec3(1.), clamp(rI, .25, 3.), .8*(1. - .5*u_model)); cg *= mix(vec3(1.), clamp(rI, .4, 2.), .5);
+    slope += rg * u_rippleRefr * 18.;
+  }
+
+  // ---- floor: static, but seen through the moving surface
+  vec2 fuv = uv0 + (uv - uv0)*.3 + slope*u_refract*.06;
+  float da = radians(u_depthAngle);
+  float dg = dot(uv0, vec2(cos(da), sin(da)))*.8 + .5;
+  float pt = fbm2(fuv*1.6 + u_seed*7.7);
+  float depth = clamp(mix(.5, dg, u_depthGrad) + (pt - .5)*u_patches*1.4, 0., 1.);   // 1 = shallow
+  vec3 base = mix(u_deep, u_shallow, depth);
+
+  if (u_sand > 0.) {
+    float rip = sin(dot(fuv, vec2(.6, .8))*46. + 7.*fbm2(fuv*2.3 + 3.)) ;
+    base *= 1. + u_sand*((vnoise(fuv*160.) - .5)*.45 + rip*.18 + (fbm2(fuv*9.) - .5)*.5);
+  }
+  if (u_tiles > 0.) {
+    vec2 tp = fuv/u_tileSize, tf = abs(fract(tp) - .5);
+    float te = .5 - max(tf.x, tf.y);
+    float tfw = fwidth(te);
+    float gm = 1. - smoothstep(u_grout*.5 - tfw, u_grout*.5 + tfw, te);
+    float tv = hash(floor(tp) + u_seed);
+    base = mix(base, base*(.9 + .2*tv), u_tiles);
+    base = mix(base, u_groutColor*mix(.45, 1., depth), gm*u_tiles);
+  }
+
+  // ---- light: caustics are brighter (and crisper) where the water is shallow
+  float fade = mix(1., .4 + .6*depth, u_depthGrad);
+  float lum = dot(cl, vec3(.3333)), glum = dot(cg, vec3(.3333));
+  base *= mix(1., .3 + .9*clamp(lum*.8 + glum*.6, 0., 1.), u_shadow);
+  base *= mix(vec3(1.), clamp(rI, .45, 1.3), .45);                     // troughs spread the light thin -> darker
+  vec3 col = base + u_intensity*fade*(cl*u_caustic + cg*u_glow*u_glowColor*.6
+                                      + pow(min(max(rI - 1., 0.)*.12, 2.5), vec3(1.15))*u_caustic   // ripple caustic rings
+                                      + max(rI - 1., 0.)*.015*u_glowColor);
+
+  // surface sheen
+  vec3 nrm = normalize(vec3(-slope*.6, 1.));
+  float spec = pow(max(0., dot(nrm, normalize(vec3(-.25, .35, 1.)))), 260.);
+  col += u_sheen*u_highlight*(spec*.9 + .05*smoothstep(.0, .5, length(slope)));
+
+  // soft highlight roll-off (keeps colour in the hot spots instead of clipping to white)
+  vec3 o = max(col - .8, 0.);
+  col = min(col, .8) + o/(1. + o/.2);
+
+  // grading
+  col = hueRotate(col, radians(u_hue));
+  col = (col - .5)*u_contrast + .5;
+  float l = dot(col, vec3(.2126,.7152,.0722));
+  col = mix(vec3(l), col, u_saturation);
+  col *= 1. - u_vignette * smoothstep(.2, 1.1, length(uv0));
+  col += (hash(gl_FragCoord.xy + fract(uPhase*97.)*311.) - .5) * u_grain;
+
+  outColor = vec4(clamp(col, 0., 1.), 1.);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { errBox.textContent = gl.getShaderInfoLog(s); throw new Error(gl.getShaderInfoLog(s)); }
+  return s;
+}
+function makeProgram(fragSrc){
+  const pr = gl.createProgram();
+  gl.attachShader(pr, compile(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(pr, compile(gl.FRAGMENT_SHADER, fragSrc));
+  gl.bindAttribLocation(pr, 0, 'aPos');
+  gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) errBox.textContent = gl.getProgramInfoLog(pr);
+  return pr;
+}
+
+/* ---- Stirring: a small "stable fluids" simulation (velocity, vorticity, pressure projection).
+   Its velocity advects a DISPLACEMENT MAP D: the caustic pattern shown at x is the pattern the
+   procedural surface has at x - D(x). So dragging literally carries the colours along with the
+   liquid, they curl into eddies, and slowly relax back ("Memory").
+   All vectors are in sim-texel units (texels are square, so it's isotropic). */
+const FL_HEAD = `#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2 uTexel;
+#define UV (gl_FragCoord.xy*uTexel)
+`;
+const FL = {
+  advect: FL_HEAD + `
+uniform sampler2D uVel; uniform float uDt, uDiss;
+void main(){
+  vec2 v = texture(uVel, UV).xy;
+  vec2 c = UV - v*uDt*uTexel;
+  // light viscosity: blends in the neighbours, which kills the grid-scale (checkerboard)
+  // noise that pressure + vorticity otherwise build up and the marble would show as squares
+  vec2 n = texture(uVel, c+vec2(uTexel.x,0.)).xy + texture(uVel, c-vec2(uTexel.x,0.)).xy
+         + texture(uVel, c+vec2(0.,uTexel.y)).xy + texture(uVel, c-vec2(0.,uTexel.y)).xy;
+  o = vec4(mix(texture(uVel, c).xy, n*.25, .2) * uDiss, 0., 1.);
+}`,
+  splat: FL_HEAD + `
+uniform sampler2D uVel; uniform vec2 uA, uB, uForce; uniform float uRad, uSpin;
+void main(){
+  vec2 p = gl_FragCoord.xy, a = uA/uTexel, b = uB/uTexel;
+  vec2 pa = p-a, ba = b-a; float h = clamp(dot(pa,ba)/max(dot(ba,ba),1e-6),0.,1.);
+  float d = length(pa - ba*h);
+  vec2 f = uForce * exp(-d*d/(uRad*uRad));
+  vec2 rel = p - b;                              // click: a vortex around the point
+  f += uSpin * vec2(-rel.y, rel.x)/uRad * exp(-dot(rel,rel)/(uRad*uRad));
+  o = vec4(texture(uVel, UV).xy + f, 0., 1.);
+}`,
+  curl: FL_HEAD + `
+uniform sampler2D uVel;
+void main(){
+  float L = texture(uVel, UV - vec2(uTexel.x,0.)).y, R = texture(uVel, UV + vec2(uTexel.x,0.)).y;
+  float B = texture(uVel, UV - vec2(0.,uTexel.y)).x, T = texture(uVel, UV + vec2(0.,uTexel.y)).x;
+  o = vec4(.5*((R-L) - (T-B)), 0., 0., 1.);
+}`,
+  vorticity: FL_HEAD + `
+uniform sampler2D uVel, uCurl; uniform float uAmt, uDt;
+void main(){
+  float L = texture(uCurl, UV - vec2(uTexel.x,0.)).x, R = texture(uCurl, UV + vec2(uTexel.x,0.)).x;
+  float B = texture(uCurl, UV - vec2(0.,uTexel.y)).x, T = texture(uCurl, UV + vec2(0.,uTexel.y)).x;
+  float C = texture(uCurl, UV).x;
+  vec2 n = .5*vec2(abs(T)-abs(B), abs(R)-abs(L));
+  n /= length(n) + 1e-4;
+  vec2 f = uAmt * C * vec2(n.x, -n.y);
+  o = vec4(texture(uVel, UV).xy + f*uDt, 0., 1.);
+}`,
+  divergence: FL_HEAD + `
+uniform sampler2D uVel;
+void main(){
+  float L = texture(uVel, UV - vec2(uTexel.x,0.)).x, R = texture(uVel, UV + vec2(uTexel.x,0.)).x;
+  float B = texture(uVel, UV - vec2(0.,uTexel.y)).y, T = texture(uVel, UV + vec2(0.,uTexel.y)).y;
+  vec2 c = UV;                                   // solid walls: mirror velocity at edges
+  if (c.x - uTexel.x < 0.) L = -texture(uVel, c).x;
+  if (c.x + uTexel.x > 1.) R = -texture(uVel, c).x;
+  if (c.y - uTexel.y < 0.) B = -texture(uVel, c).y;
+  if (c.y + uTexel.y > 1.) T = -texture(uVel, c).y;
+  o = vec4(.5*(R-L+T-B), 0., 0., 1.);
+}`,
+  pressure: FL_HEAD + `
+uniform sampler2D uP, uDiv;
+void main(){
+  float L = texture(uP, UV - vec2(uTexel.x,0.)).x, R = texture(uP, UV + vec2(uTexel.x,0.)).x;
+  float B = texture(uP, UV - vec2(0.,uTexel.y)).x, T = texture(uP, UV + vec2(0.,uTexel.y)).x;
+  o = vec4((L+R+B+T - texture(uDiv, UV).x)*.25, 0., 0., 1.);
+}`,
+  gradient: FL_HEAD + `
+uniform sampler2D uP, uVel;
+void main(){
+  float L = texture(uP, UV - vec2(uTexel.x,0.)).x, R = texture(uP, UV + vec2(uTexel.x,0.)).x;
+  float B = texture(uP, UV - vec2(0.,uTexel.y)).x, T = texture(uP, UV + vec2(0.,uTexel.y)).x;
+  o = vec4(texture(uVel, UV).xy - .5*vec2(R-L, T-B), 0., 1.);
+}`,
+  // camera motion field (texels/sec, low-res, linearly filtered): pull the liquid toward it
+  camForce: FL_HEAD + `
+uniform sampler2D uVel, uFlow; uniform float uK, uBlend;
+void main(){
+  vec2 v = texture(uVel, UV).xy, f = texture(uFlow, UV).xy * uK;
+  float w = smoothstep(2., 40., length(f)) * uBlend;
+  o = vec4(mix(v, f, w), 0., 1.);
+}`,
+  // ---- ripples: 2D wave equation on a height field (R = height, G = vertical velocity)
+  rippleStep: FL_HEAD + `
+uniform sampler2D uS; uniform float uC2, uDamp, uVisc, uEdge;
+void main(){
+  vec2 s = texture(uS, UV).xy;
+  vec2 L = texture(uS, UV - vec2(uTexel.x,0.)).xy, R = texture(uS, UV + vec2(uTexel.x,0.)).xy;
+  vec2 B = texture(uS, UV - vec2(0.,uTexel.y)).xy, T = texture(uS, UV + vec2(0.,uTexel.y)).xy;
+  vec2 d = texture(uS, UV + uTexel).xy + texture(uS, UV - uTexel).xy
+         + texture(uS, UV + vec2(uTexel.x,-uTexel.y)).xy + texture(uS, UV + vec2(-uTexel.x,uTexel.y)).xy;
+  vec2 lap = (4.*(L+R+B+T) + d - 20.*s) / 6.;       // isotropic 9-point Laplacian: round rings, not diamonds
+  float v = (s.y + uC2*lap.x + uVisc*lap.y) * uDamp; // viscosity on velocity smooths grid-scale chatter
+  float h = (s.x + v) * .9997;                       // slowly forget any net volume pushed in
+  // open water at the borders: absorb waves there (Edge bounce = 1 lets them reflect)
+  vec2 e = min(UV, 1. - UV) / uTexel;
+  float k = mix(mix(.86, 1., smoothstep(0., 28., min(e.x, e.y))), 1., uEdge);
+  o = vec4(h*k, v*k, 0., 1.);
+}`,
+  // an object pushed through the surface: a dent (uAmp), a bow wave piled up in front and a
+  // trough sucked down behind it (uDip along uDir), and broken-up chop around it (uTurb)
+  rippleDrop: FL_HEAD + `
+uniform sampler2D uS; uniform vec2 uA, uB, uDir; uniform float uRad, uAmp, uDip, uTurb, uSeed;
+void main(){
+  vec2 p = gl_FragCoord.xy, a = uA/uTexel, b = uB/uTexel;
+  vec2 pa = p-a, ba = b-a; float t = clamp(dot(pa,ba)/max(dot(ba,ba),1e-6),0.,1.);
+  vec2 rel = pa - ba*t; float d2 = dot(rel, rel);
+  float g = exp(-d2/(uRad*uRad));
+  float bow = dot(rel, uDir)/uRad * g * 1.6;
+  float t1 = uSeed*6.2832, t2 = uSeed*17.13 + 1.3;
+  float n = sin(dot(p, vec2(cos(t1), sin(t1))*.42) + uSeed*40.) * sin(dot(p, vec2(cos(t2), sin(t2))*.36) + uSeed*91.);
+  float gt = exp(-d2/(uRad*uRad*2.5));
+  vec2 s = texture(uS, UV).xy;
+  o = vec4(s.x + uAmp*g + uDip*bow + uTurb*n*gt, s.y, 0., 1.);
+}`,
+  // vortices shed behind the hand pull the surface down into little whirlpool dents
+  rippleCurl: FL_HEAD + `
+uniform sampler2D uS, uCurl; uniform float uK;
+void main(){
+  vec2 s = texture(uS, UV).xy;
+  // blurred |curl|: only real eddies make dents, not the sim's grid-scale chatter
+  vec2 e = uTexel*4.;
+  float c = (2.*abs(texture(uCurl, UV).x) + abs(texture(uCurl, UV + vec2(e.x,0.)).x) + abs(texture(uCurl, UV - vec2(e.x,0.)).x)
+           + abs(texture(uCurl, UV + vec2(0.,e.y)).x) + abs(texture(uCurl, UV - vec2(0.,e.y)).x)) / 6.;
+  float w = .025*smoothstep(12., 45., c);
+  o = vec4(mix(s.x, -uK*smoothstep(12., 90., c), w), s.y, 0., 1.);
+}`,
+  // camera motion pushes the surface down where things move -> moving people leave wakes
+  rippleCam: FL_HEAD + `
+uniform sampler2D uS, uFlow; uniform float uK;
+void main(){
+  vec2 s = texture(uS, UV).xy;
+  float m = length(texture(uFlow, UV).xy);
+  o = vec4(s.x - uK*smoothstep(4., 120., m), s.y, 0., 1.);
+}`,
+  // screened Poisson (Jacobi, warm-started each frame): lap(phi) = -src, src = h/depth capped at 0.7
+  ripplePhi: FL_HEAD + `
+uniform sampler2D uP, uH; uniform float uInvHd;
+void main(){
+  float L = texture(uP, UV - vec2(uTexel.x,0.)).x, R = texture(uP, UV + vec2(uTexel.x,0.)).x;
+  float B = texture(uP, UV - vec2(0.,uTexel.y)).x, T = texture(uP, UV + vec2(0.,uTexel.y)).x;
+  float src = .7*tanh(texture(uH, UV).x * uInvHd / .7);
+  o = vec4((L + R + B + T + src) / 4.003, 0., 0., 1.);
+}`,
+  // restoring force: displaced liquid springs back toward where it came from (texels/s^2 = -k * D)
+  spring: FL_HEAD + `
+uniform sampler2D uVel, uDisp; uniform float uK, uDt;
+void main(){
+  vec2 e = uTexel*2.;
+  vec2 D = (4.*texture(uDisp, UV).xy + texture(uDisp, UV + vec2(e.x,0.)).xy + texture(uDisp, UV - vec2(e.x,0.)).xy
+          + texture(uDisp, UV + vec2(0.,e.y)).xy + texture(uDisp, UV - vec2(0.,e.y)).xy) / 8.;
+  o = vec4(texture(uVel, UV).xy - uK*D*uDt, 0., 1.);
+}`,
+  scale: FL_HEAD + `
+uniform sampler2D uSrc; uniform float uK;
+void main(){ o = vec4(texture(uSrc, UV).xy*uK, 0., 1.); }`,
+  // backward map: D_new(x) = D(x - v dt) + v dt, then relaxed toward 0
+  displace: FL_HEAD + `
+uniform sampler2D uVel, uDisp; uniform float uDt, uRelax;
+void main(){
+  vec2 v = texture(uVel, UV).xy * uDt;
+  vec2 c = UV - v*uTexel;
+  vec2 D = texture(uDisp, c).xy;
+  // a touch of diffusion keeps sharp shear from tearing the colours into jagged bits
+  vec2 n = texture(uDisp, c+vec2(uTexel.x,0.)).xy + texture(uDisp, c-vec2(uTexel.x,0.)).xy
+         + texture(uDisp, c+vec2(0.,uTexel.y)).xy + texture(uDisp, c-vec2(0.,uTexel.y)).xy;
+  D = mix(D, n*.25, .12) + v;
+  o = vec4(D*uRelax, 0., 1.);
+}`,
+};
+
+const prog = makeProgram(FRAG);
+const FP = {}, FU = {};
+for (const [name, src] of Object.entries(FL)) {
+  FP[name] = makeProgram(src);
+  FU[name] = new Proxy({}, {get: (c, k) => k in c ? c[k] : (c[k] = gl.getUniformLocation(FP[name], k))});
+}
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+['uRes','uPhase','uDisp','uDispSize','uStirOn','uRip','uRipSize','uRipOn','uPhi', ...PARAMS.map(p=>'u_'+p.key), ...COLORS.map(c=>'u_'+c.key)]
+  .forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+// float render targets: desktop GPUs expose EXT_color_buffer_float; many phones (iPhone) only the half-float one,
+// which is all the sims need (RG16F)
+const fluidOK = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+let sim = null;
+function makeTarget(w, h){
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, w, h, 0, gl.RG, gl.HALF_FLOAT, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  return {t, fb};
+}
+const pair = (w, h) => ({a: makeTarget(w, h), b: makeTarget(w, h), swap(){ [this.a, this.b] = [this.b, this.a]; }});
+function makeSim(aspect){
+  if (!fluidOK) return;
+  if (sim) for (const x of [sim.vel.a, sim.vel.b, sim.prs.a, sim.prs.b, sim.disp.a, sim.disp.b, sim.div, sim.curl, sim.rip.a, sim.rip.b, sim.phi.a, sim.phi.b])
+    { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.fb); }
+  const LONG = IS_TOUCH ? 256 : 320;     // a lighter simulation grid on phones
+  const w = aspect >= 1 ? LONG : Math.round(LONG*aspect), h = aspect >= 1 ? Math.round(LONG/aspect) : LONG;
+  sim = {w, h, aspect, vel: pair(w,h), prs: pair(w,h), disp: pair(w,h), div: makeTarget(w,h), curl: makeTarget(w,h), rip: pair(w,h), phi: pair(w,h)};
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+function clearStir(){ if (sim) makeSim(sim.aspect); }
+
+// run one fullscreen pass: bind textures to units in order, set uniforms, draw into target
+function pass(name, target, textures, uniforms = {}){
+  const u = FU[name];
+  gl.useProgram(FP[name]);
+  gl.uniform2f(u.uTexel, 1/sim.w, 1/sim.h);
+  Object.entries(textures).forEach(([k, tex], i) => {
+    gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex.t); gl.uniform1i(u[k], i);
+  });
+  for (const [k, v] of Object.entries(uniforms)) Array.isArray(v) ? gl.uniform2f(u[k], v[0], v[1]) : gl.uniform1f(u[k], v);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+// pointer: stirs ONLY while the mouse button is held (click = little vortex, drag = push)
+const pointer = {down: false, last: null, lastT: 0, splats: []};
+function canvasUV(e){
+  // account for object-fit: contain letterboxing while recording at a fixed size
+  const r = canvas.getBoundingClientRect(), ca = canvas.width/canvas.height, ra = r.width/r.height;
+  let w = r.width, h = r.height, ox = 0, oy = 0;
+  if (ca > ra) { h = r.width/ca; oy = (r.height-h)/2; } else { w = r.height*ca; ox = (r.width-w)/2; }
+  return [(e.clientX - r.left - ox)/w, 1 - (e.clientY - r.top - oy)/h];
+}
+// every finger (or the mouse) gets its own stroker, so several fingers can move through the water
+const touches = new Map();
+canvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || state.stirMode === 'off') return;
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+  const p = canvasUV(e);
+  touches.set(e.pointerId, {last: p, lastT: e.timeStamp, vel: [0, 0]});
+  pointer.splats.push({a: p, b: p, force: [0,0], spin: (Math.random() < .5 ? -1 : 1) * state.stirSpin, click: true});
+});
+// A "stroker" turns a moving point (mouse, or a tracked hand) into fluid splats.
+// st = {last:[u,v], lastT:ms, vel:[x,y]}; force/size are the dial values to use.
+function strokeTo(st, p, t, force, size){
+  const dt = Math.max((t - st.lastT) / 1000, 1/500);
+  const sw = sim ? sim.w : 256, sh = sim ? sim.h : 256;
+  // velocity in sim texels/sec, low-passed so jittery or bursty input doesn't spike
+  const rx = (p[0] - st.last[0]) * sw / dt, ry = (p[1] - st.last[1]) * sh / dt;
+  const a = 1 - Math.exp(-dt / 0.03);
+  st.vel[0] += (rx - st.vel[0]) * a; st.vel[1] += (ry - st.vel[1]) * a;
+  // soft-clamp the force (tanh) so fast flicks saturate smoothly instead of slamming the fluid
+  const k = force * 0.35, maxF = 900;
+  let fx = st.vel[0] * k, fy = st.vel[1] * k;
+  const m = Math.hypot(fx, fy);
+  if (m > 1e-3) { const s = maxF * Math.tanh(m / maxF) / m; fx *= s; fy *= s; }
+  // split long strokes into short capsules so the force follows the curve of the stroke
+  const segLen = Math.hypot((p[0]-st.last[0])*sw, (p[1]-st.last[1])*sh);
+  const n = Math.min(16, Math.max(1, Math.ceil(segLen / Math.max(2, size*sh*0.5))));
+  for (let i = 0; i < n; i++) {
+    const t0 = i/n, t1 = (i+1)/n, L = st.last;
+    pointer.splats.push({a: [L[0]+(p[0]-L[0])*t0, L[1]+(p[1]-L[1])*t0], b: [L[0]+(p[0]-L[0])*t1, L[1]+(p[1]-L[1])*t1],
+                         force: [fx/n, fy/n], spin: 0, size});
+  }
+  st.last = p; st.lastT = t;
+}
+canvas.addEventListener('pointermove', e => {
+  const st = touches.get(e.pointerId);
+  if (!st) return;
+  // coalesced events give every intermediate position, not just one per frame
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  for (const ce of (evs.length ? evs : [e])) strokeTo(st, canvasUV(ce), ce.timeStamp, state.stirForce, state.stirSize);
+});
+const endDrag = e => touches.delete(e.pointerId);
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('lostpointercapture', endDrag);
+canvas.addEventListener('contextmenu', e => e.preventDefault());   // long-press on phones
+
+/* ---- Ripples: the same strokes (mouse, tracked hands) poke a wave-equation height field instead
+   of pushing ink around. A click is a drop (an expanding ring); a drag leaves a wake. */
+let ripAcc = 0;
+function stepRipple(dt, splats, water){
+  if (!sim) return;
+  const aspect = canvas.width / canvas.height;
+  if (Math.abs(aspect - sim.aspect) > 0.01) makeSim(aspect);
+  // rain: random drops (adds life, but note it won't repeat exactly in a recorded loop)
+  if (state.rain > 0) {
+    let n = state.rain * state.rain * 40 * dt;
+    while (n > 0) {
+      if (n >= 1 || Math.random() < n) {
+        const p = [Math.random(), Math.random()];
+        splats.push({a: p, b: p, force: [0,0], spin: 0, drop: -(0.3 + Math.random()*0.7), size: 0.012 + Math.random()*0.02});
+      }
+      n -= 1;
+    }
+  }
+  const HZ = 150 * state.rippleSpeed;
+  ripAcc = Math.min(ripAcc + dt, 12/HZ);
+  const ticks = Math.floor(ripAcc * HZ); ripAcc -= ticks / HZ;
+  if (!ticks && !splats.length) return;
+  gl.viewport(0, 0, sim.w, sim.h);
+  const nT = Math.max(ticks, 1);
+  const damp = Math.exp(-1 / (state.rippleLife * 150));   // lifetime in seconds at 1x speed
+  for (let t = 0; t < nT; t++) {
+    // Every stroke segment is laid down gradually across ALL substeps (a continuous moving source).
+    // Dropping a whole frame's segment in one substep made the wake come out as evenly spaced
+    // pulses -> ladder-like stripes. Clicks / drops still land once, on the first substep.
+    for (let i = 0; i < splats.length; i++) {
+      const s = splats[i];
+      const point = s.click || s.drop != null;
+      if (point && t > 0) continue;
+      const r = (s.size || state.stirSize) * sim.h * 0.45 * state.rippleSize;
+      let A = s.a, B = s.b, share = 1;
+      if (!point) {
+        const L = Math.hypot((s.b[0]-s.a[0])*sim.w, (s.b[1]-s.a[1])*sim.h), c = 1.5*r;
+        share = (L + c) / (L + nT*c);       // keeps the total pushed-in volume the same for any nT
+        const t0 = t/nT, t1 = (t+1)/nT;
+        A = [s.a[0] + (s.b[0]-s.a[0])*t0, s.a[1] + (s.b[1]-s.a[1])*t0];
+        B = [s.a[0] + (s.b[0]-s.a[0])*t1, s.a[1] + (s.b[1]-s.a[1])*t1];
+      }
+      const speed = Math.hypot(s.force[0], s.force[1]);
+      const dir = speed > 1e-6 ? [s.force[0]/speed, s.force[1]/speed] : [1, 0];
+      let amp = 0, dip = 0, turb = 0;
+      if (s.drop != null) amp = s.drop;
+      else if (s.click) { amp = water ? -0.6 : -1.1; turb = water ? 0.5 * state.turb : 0; }
+      else {
+        const a = Math.min(1.2, speed * (water ? 0.0016 : 0.004));
+        if (water) { amp = -0.3*a; dip = a * state.bow; turb = 0.35 * a * state.turb; }
+        else amp = -a;
+      }
+      const k = state.rippleAmp * share;
+      if (!amp && !dip && !turb) continue;
+      pass('rippleDrop', sim.rip.b, {uS: sim.rip.a}, {uA: A, uB: B, uDir: dir, uRad: Math.max(1.5, r),
+           uAmp: amp*k, uDip: dip*k, uTurb: turb*k, uSeed: Math.random()});
+      sim.rip.swap();
+    }
+    if (cam.flowActive) {
+      pass('rippleCam', sim.rip.b, {uS: sim.rip.a, uFlow: cam.flowTex}, {uK: 0.01 * state.camBody * cam.bodyScale * state.rippleAmp});
+      sim.rip.swap();
+    }
+    if (water && state.dimples > 0 && state.stirCurl > 0) {
+      pass('rippleCurl', sim.rip.b, {uS: sim.rip.a, uCurl: sim.curl}, {uK: 0.5 * state.dimples * state.rippleAmp});
+      sim.rip.swap();
+    }
+    pass('rippleStep', sim.rip.b, {uS: sim.rip.a}, {uC2: 0.42, uDamp: damp, uVisc: 0.03, uEdge: state.rippleEdge});
+    sim.rip.swap();
+  }
+  // how far the water has been carried by the waves (see ripplePhi); depth ~ 0.25 / Refraction
+  for (let i = 0; i < 24; i++) {
+    pass('ripplePhi', sim.phi.b, {uP: sim.phi.a, uH: sim.rip.a}, {uInvHd: 4 * state.rippleRefr});
+    sim.phi.swap();
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+let simAcc = 0;
+function stepSim(dt, splats, water){
+  if (!sim) return;
+  const aspect = canvas.width / canvas.height;
+  if (Math.abs(aspect - sim.aspect) > 0.01) makeSim(aspect);
+  // 120 Hz substeps: shorter advection hops keep fast flows from tearing
+  const HZ = 120;
+  simAcc = Math.min(simAcc + dt, 6/HZ);
+  const ticks = Math.floor(simAcc * HZ); simAcc -= ticks / HZ;
+  if (!ticks && !splats.length) return;
+  gl.viewport(0, 0, sim.w, sim.h);
+  const h = 1/HZ, rad = state.stirSize * sim.h, nT = Math.max(ticks, 1);
+  const diss = Math.pow(state.stirFlow, 60*h), relax = Math.pow(water ? state.settle : state.stirMemory, 60*h);
+  const drag = water ? state.waterDrag : 1;   // in water, the hand carries the liquid along more gently
+
+  for (let t = 0; t < nT; t++) {
+    // spread this frame's stroke over the substeps instead of injecting it all at once
+    const from = Math.floor(splats.length * t / nT), to = Math.floor(splats.length * (t+1) / nT);
+    for (let i = from; i < to; i++) {
+      const s = splats[i];
+      const r = s.size ? s.size * sim.h : rad;
+      pass('splat', sim.vel.b, {uVel: sim.vel.a}, {uA: s.a, uB: s.b, uForce: [s.force[0]*drag, s.force[1]*drag], uRad: r, uSpin: s.spin * r * (water ? 1.6 : 2.5)});
+      sim.vel.swap();
+    }
+    // camera: steer the liquid toward the motion seen by the camera (people walking by)
+    if (cam.flowActive) {
+      pass('camForce', sim.vel.b, {uVel: sim.vel.a, uFlow: cam.flowTex}, {uK: state.camBody * cam.bodyScale * 1.6, uBlend: 0.12});
+      sim.vel.swap();
+    }
+    if (state.stirCurl > 0) {
+      pass('curl', sim.curl, {uVel: sim.vel.a});
+      pass('vorticity', sim.vel.b, {uVel: sim.vel.a, uCurl: sim.curl}, {uAmt: state.stirCurl * (water ? 12 : 30), uDt: h});
+      sim.vel.swap();
+    }
+    if (water && state.slosh > 0) {
+      pass('spring', sim.vel.b, {uVel: sim.vel.a, uDisp: sim.disp.a}, {uK: 22 * state.slosh, uDt: h});
+      sim.vel.swap();
+    }
+    pass('divergence', sim.div, {uVel: sim.vel.a});
+    pass('scale', sim.prs.b, {uSrc: sim.prs.a}, {uK: 0.8}); sim.prs.swap();
+    for (let i = 0; i < 20; i++) { pass('pressure', sim.prs.b, {uP: sim.prs.a, uDiv: sim.div}); sim.prs.swap(); }
+    pass('gradient', sim.vel.b, {uP: sim.prs.a, uVel: sim.vel.a}); sim.vel.swap();
+    pass('displace', sim.disp.b, {uVel: sim.vel.a, uDisp: sim.disp.a}, {uDt: h, uRelax: relax}); sim.disp.swap();
+    pass('advect', sim.vel.b, {uVel: sim.vel.a}, {uDt: h, uDiss: diss}); sim.vel.swap();
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+/* ============================================================
+   CAMERA INTERACTION
+   Setup assumed: camera mounted right under the projector, looking at the same wall,
+   so the camera image lines up (roughly) with the projected image. Use the Crop dials
+   to fit the camera view to the projected area.
+   - Walking by:   optical flow of the camera image steers the liquid (camForce pass).
+   - Standing still in front: after "Still secs" the piece switches to hand mode;
+                   tracked hands stir like a mouse drag, body flow is damped way down.
+   All processing is local; only the hand model files are downloaded (from jsDelivr/Google).
+   ============================================================ */
+const CW = 80, CH = 60;          // analysis resolution (camera crop is scaled to this)
+const GW = 20, GH = 15;          // flow grid -> uploaded as a tiny texture
+const cam = {
+  stream: null, video: document.createElement('video'),
+  work: null, wctx: null,
+  prev: null, cur: new Float32Array(CW*CH), bg: null, tmp: new Float32Array(CW*CH),
+  flow: new Float32Array(GW*GH*2), flowTexData: new Float32Array(GW*GH*2), motionMask: new Uint8Array(CW*CH),
+  flowTex: null, flowActive: false, lastFlowT: 0, lastFrameT: 0, fps: 30, lastVideoTime: -1,
+  mode: 'off', stillT: 0, walkT: 0, goneT: 0, motionFrac: 0, fgFrac: 0, bodyScale: 1,
+  gain: 1, gainMean: 128, noise: 2, tuning: [], handCanvas: null, handCtx: null,
+  hands: null, handsStatus: 'not loaded', handPts: [], strokers: [],
+};
+cam.video.muted = true; cam.video.playsInline = true;
+
+// tiny RG16F texture holding the flow field (filled from Float32Array, filtered linearly)
+cam.flowTex = (() => {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, GW, GH, 0, gl.RG, gl.FLOAT, new Float32Array(GW*GH*2));
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+  return {t};
+})();
+
+cam.work = document.createElement('canvas'); cam.work.width = CW; cam.work.height = CH;
+cam.wctx = cam.work.getContext('2d', {willReadFrequently: true});
+
+const camStatusEl = () => document.getElementById('camStatus');
+function setCamStatus(txt){ const el = camStatusEl(); if (el) el.textContent = txt; }
+
+async function listCameras(){
+  const sel = document.getElementById('camSelect');
+  const phoneOpt = '<option value="__phone__">📱 Phone app over USB (Marble CamLink)</option>';
+  let devs = [];
+  if (navigator.mediaDevices?.enumerateDevices) devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  else setCamStatus('Browser camera API not available here (the phone app still works).');
+  sel.innerHTML = phoneOpt + devs.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i+1)}</option>`).join('');
+  if (state.camDevice === '__phone__' || (state.camDevice && devs.some(d => d.deviceId === state.camDevice))) sel.value = state.camDevice;
+  else if (devs.length) sel.value = devs[0].deviceId;
+}
+
+async function startCamera(){
+  stopCamera(false);
+  const sel = document.getElementById('camSelect');
+  const id = sel.value || state.camDevice;
+  if (id === '__phone__') return startPhone();
+  if (!navigator.mediaDevices?.getUserMedia) { setCamStatus('Camera API not available here.'); return; }
+  setCamStatus('Starting camera…');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: false,
+      // low light: ask for fewer frames per second so each frame can expose longer
+      video: {...(id ? {deviceId: {exact: id}} : {}), width: {ideal: 640}, height: {ideal: 480},
+              frameRate: state.camLowLight ? {ideal: 15, max: 30} : {ideal: 30}}});
+    useCameraStream(stream);
+    await applyCameraTuning();
+    await listCameras();                 // labels become available after permission
+    const track = stream.getVideoTracks()[0];
+    const did = track.getSettings().deviceId;
+    if (did) { state.camDevice = did; sel.value = did; }
+    state.camOn = true; save();
+  } catch (err) {
+    setCamStatus('Could not start camera: ' + err.message);
+    state.camOn = false; save(); syncCamButtons();
+  }
+}
+// Low-light hardware tuning: only touches settings the camera reports it supports.
+// (Virtual cameras such as Camo/DroidCam usually expose few or none of these; then the
+//  software side below does the work, and exposure is set in the phone app instead.)
+async function applyCameraTuning(){
+  const track = cam.stream?.getVideoTracks?.()[0];
+  cam.tuning = [];
+  if (!track || !track.getCapabilities) return;
+  const caps = track.getCapabilities(), adv = {};
+  const lerp = (r, t) => r.min + (r.max - r.min) * t;
+  const step = (r, v) => r.step ? Math.round((v - r.min) / r.step) * r.step + r.min : v;
+  if (state.camLowLight) {
+    if (caps.exposureMode?.includes('continuous')) adv.exposureMode = 'continuous';
+    if (caps.exposureCompensation) adv.exposureCompensation = step(caps.exposureCompensation, lerp(caps.exposureCompensation, 0.75));
+    if (caps.brightness) adv.brightness = step(caps.brightness, lerp(caps.brightness, 0.65));
+    if (caps.contrast) adv.contrast = step(caps.contrast, lerp(caps.contrast, 0.55));
+    if (caps.sharpness) adv.sharpness = step(caps.sharpness, caps.sharpness.min);   // sharpening amplifies noise
+    if (caps.whiteBalanceMode?.includes('continuous')) adv.whiteBalanceMode = 'continuous';
+    if (caps.frameRate) adv.frameRate = Math.max(caps.frameRate.min || 1, Math.min(15, caps.frameRate.max || 15));
+  } else {
+    if (caps.exposureMode?.includes('continuous')) adv.exposureMode = 'continuous';
+    if (caps.exposureCompensation) adv.exposureCompensation = step(caps.exposureCompensation, lerp(caps.exposureCompensation, 0.5));
+    if (caps.brightness) adv.brightness = step(caps.brightness, lerp(caps.brightness, 0.5));
+    if (caps.frameRate) adv.frameRate = Math.min(30, caps.frameRate.max || 30);
+  }
+  for (const [k, v] of Object.entries(adv)) {
+    try { await track.applyConstraints({advanced: [{[k]: v}]}); cam.tuning.push(k); }
+    catch (err) { /* this camera refused that one; keep going */ }
+  }
+  console.info('Camera tuning applied:', cam.tuning.join(', ') || 'none supported', '| capabilities:', Object.keys(caps).join(', '));
+}
+
+// also used directly for testing with a synthetic stream
+function useCameraStream(stream){
+  cam.source = 'local';
+  cam.stream = stream; cam.video.srcObject = stream; cam.video.play().catch(() => {});
+  cam.prev = null; cam.bg = null; cam.mode = 'idle'; cam.stillT = cam.walkT = cam.goneT = 0;
+  syncCamButtons();
+  if (state.camHands) loadHandModel();
+}
+function stopCamera(remember = true){
+  if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+  clearTimeout(cam.phoneRetry);
+  if (cam.phoneWs) { const w = cam.phoneWs; cam.phoneWs = null; try { w.close(); } catch {} }
+  cam.source = null; cam.phoneStats = null; cam.phoneFaces = 0;
+  if (typeof syncPhoneRow === 'function') syncPhoneRow();
+  cam.stream = null; cam.video.srcObject = null; cam.mode = 'off'; cam.flowActive = false;
+  cam.strokers = []; cam.handPts = [];
+  if (remember) { state.camOn = false; save(); }
+  syncCamButtons(); setCamStatus('Camera off'); drawPreview();
+}
+function syncCamButtons(){
+  const b = document.getElementById('camToggle');
+  if (b) { b.textContent = cam.stream ? '■ Stop camera' : '● Start camera'; b.className = cam.stream ? 'rec' : 'primary'; }
+}
+
+// ---- Phone app source: "Marble CamLink" on the Android phone does the camera tuning and the
+// motion analysis itself, and streams results + JPEG frames over the USB cable
+// (start-phone-link.ps1 runs: adb forward tcp:47865 tcp:47865).
+cam.phoneCanvas = document.createElement('canvas'); cam.phoneCanvas.width = 640; cam.phoneCanvas.height = 480;
+cam.phoneCtx = cam.phoneCanvas.getContext('2d');
+const PHONE_URL = 'ws://127.0.0.1:47865';   // IPv4: adb forward only listens on 127.0.0.1
+function startPhone(){
+  cam.source = 'phone';
+  cam.stream = {getTracks: () => [], phone: true};
+  cam.prev = null; cam.mode = 'idle'; cam.stillT = cam.walkT = cam.goneT = 0;
+  cam.phoneFaces = 0; cam.phoneStats = null; cam.phoneInfo = null; cam.lastFrameT = performance.now();
+  state.camOn = true; state.camDevice = '__phone__'; save();
+  syncCamButtons(); syncPhoneRow();
+  if (state.camHands) loadHandModel();
+  connectPhone();
+}
+function connectPhone(){
+  if (cam.source !== 'phone') return;
+  setCamStatus('Connecting to the phone app…');
+  let ws;
+  try { ws = new WebSocket(PHONE_URL); } catch (e) { setCamStatus('Phone link error: ' + e.message); return; }
+  ws.binaryType = 'blob';
+  cam.phoneWs = ws;
+  ws.onopen = () => phoneSync('all');
+  ws.onmessage = ev => typeof ev.data === 'string' ? onPhoneText(ev.data) : onPhoneJpeg(ev.data);
+  ws.onclose = () => {
+    if (cam.phoneWs !== ws) return;
+    cam.phoneWs = null; cam.phoneStats = null;
+    if (cam.source === 'phone') {
+      setCamStatus('Phone app not reachable. Plug the phone in, open Marble CamLink, and run start-phone-link.ps1 on this PC. Retrying…');
+      cam.phoneRetry = setTimeout(connectPhone, 2000);
+    }
+  };
+}
+function phoneSend(o){ if (cam.phoneWs && cam.phoneWs.readyState === 1) cam.phoneWs.send(JSON.stringify(o)); }
+// push the relevant dial / checkbox values to the phone
+function phoneSync(key){
+  if (cam.source !== 'phone') return;
+  if (key === 'all' || key === 'camSens') phoneSend({cmd: 'sens', v: state.camSens});
+  if (key === 'all' || /^cam(Left|Right|Top|Bottom)$/.test(key))
+    phoneSend({cmd: 'crop', l: state.camLeft, t: state.camTop, r: state.camRight, b: state.camBottom});
+  if (key === 'all' || key === 'camLowLight') phoneSend({cmd: 'lowlight', on: !!state.camLowLight});
+}
+function onPhoneJpeg(blob){
+  createImageBitmap(blob).then(bmp => {
+    if (cam.phoneCanvas.width !== bmp.width || cam.phoneCanvas.height !== bmp.height) { cam.phoneCanvas.width = bmp.width; cam.phoneCanvas.height = bmp.height; }
+    cam.phoneCtx.drawImage(bmp, 0, 0);
+    bmp.close();
+  }).catch(() => {});
+}
+function onPhoneText(s){
+  let m; try { m = JSON.parse(s); } catch { return; }
+  if (m.type === 'info') { cam.phoneInfo = m; console.info('Phone camera info', m); return; }
+  if (m.type !== 'frame' || cam.source !== 'phone') return;
+  const now = performance.now();
+  const dtF = Math.min(0.2, Math.max(1/120, (now - cam.lastFrameT) / 1000)); cam.lastFrameT = now;
+  if (m.fps > 1) cam.fps = m.fps;
+  if (m.flow && m.flow.length === cam.flow.length) cam.flow.set(m.flow);
+  cam.motionFrac = m.motion; cam.fgFrac = m.presence; cam.noise = m.noise; cam.gain = m.gain;
+  cam.phoneFaces = m.faces | 0; cam.phoneStats = m;
+  const bits = atob(m.mask || '');
+  for (let i = 0; i < CW*CH; i++) cam.motionMask[i] = (bits.charCodeAt(i >> 3) >> (i & 7)) & 1;
+  camPostAnalysis(now, dtF, cam.phoneCanvas, cam.phoneCanvas.width, cam.phoneCanvas.height, !!state.camLowLight);
+}
+function syncPhoneRow(){
+  const r = document.getElementById('phoneRow');
+  if (r) r.style.display = cam.source === 'phone' ? 'flex' : 'none';
+}
+
+// ---- MediaPipe hand landmarker (lazy, optional; needs internet the first time)
+const MP_VER = '0.10.14';
+async function loadHandModel(){
+  if (cam.hands || cam.handsStatus === 'loading') return;
+  cam.handsStatus = 'loading';
+  try {
+    const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`);
+    const files = await vision.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+    const opts = delegate => ({
+      baseOptions: {modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate},
+      runningMode: 'VIDEO', numHands: 4, minHandDetectionConfidence: 0.5, minTrackingConfidence: 0.5});
+    try { cam.hands = await vision.HandLandmarker.createFromOptions(files, opts('GPU')); }
+    catch { cam.hands = await vision.HandLandmarker.createFromOptions(files, opts('CPU')); }
+    cam.handsStatus = 'ready';
+  } catch (err) {
+    cam.handsStatus = 'unavailable';
+    console.warn('Hand model could not load, falling back to motion-only hands:', err);
+  }
+}
+
+// camera-image coords (0..1, y down, full frame) -> screen uv (0..1, y up), honouring crop + flips
+function camToScreen(x, y){
+  let u = (x - state.camLeft) / Math.max(0.05, state.camRight - state.camLeft);
+  let v = (y - state.camTop) / Math.max(0.05, state.camBottom - state.camTop);
+  if (state.camMirror) u = 1 - u;
+  if (!state.camFlipY) v = 1 - v;
+  return [u, v];
+}
+
+function processCamera(now){
+  const v = cam.video;
+  if (!cam.stream || v.readyState < 2 || !v.videoWidth) return;
+  if (v.currentTime === cam.lastVideoTime) return;     // no new frame yet
+  cam.lastVideoTime = v.currentTime;
+  const dtF = Math.min(0.2, Math.max(1/120, (now - cam.lastFrameT) / 1000)); cam.lastFrameT = now;
+  cam.fps += (1/dtF - cam.fps) * 0.1;
+
+  // 1) grab the cropped region at analysis resolution -> blurred luminance
+  const vw = v.videoWidth, vh = v.videoHeight;
+  const sx = state.camLeft*vw, sy = state.camTop*vh;
+  const sw = Math.max(8, (state.camRight - state.camLeft)*vw), sh = Math.max(8, (state.camBottom - state.camTop)*vh);
+  cam.wctx.drawImage(v, sx, sy, sw, sh, 0, 0, CW, CH);
+  const px = cam.wctx.getImageData(0, 0, CW, CH).data;
+  const L = cam.tmp;
+  for (let i = 0, j = 0; i < CW*CH; i++, j += 4) L[i] = 0.299*px[j] + 0.587*px[j+1] + 0.114*px[j+2];
+
+  // low light: automatic gain — stretch the dim image to a standard brightness/contrast
+  // so a dark room behaves like a lit one (gain is smoothed so it doesn't pump)
+  const low = state.camLowLight;
+  if (low) {
+    let mean = 0; for (let i = 0; i < CW*CH; i++) mean += L[i]; mean /= CW*CH;
+    let vr = 0;   for (let i = 0; i < CW*CH; i++) { const d = L[i] - mean; vr += d*d; }
+    const sd = Math.sqrt(vr / (CW*CH));
+    const target = Math.min(8, Math.max(1, 42 / Math.max(sd, 3)));
+    // start at the right gain on the first frame (so the background model isn't built on a
+    // half-adjusted image), then adapt slowly
+    if (!cam.prev) { cam.gain = target; cam.gainMean = mean; }
+    else { cam.gain += (target - cam.gain) * 0.015; cam.gainMean += (mean - cam.gainMean) * 0.015; }
+    for (let i = 0; i < CW*CH; i++) L[i] = Math.min(255, Math.max(0, (L[i] - cam.gainMean) * cam.gain + 128));
+  } else cam.gain = 1;
+
+  // spatial denoise: 3x3 box blur normally, 5x5 in low light (dark sensors are grainy)
+  const cur = cam.cur, R = low ? 2 : 1;
+  for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+    let s = 0, n = 0;
+    for (let dy = -R; dy <= R; dy++) { const yy = y+dy; if (yy < 0 || yy >= CH) continue;
+      for (let dx = -R; dx <= R; dx++) { const xx = x+dx; if (xx < 0 || xx >= CW) continue; s += L[yy*CW+xx]; n++; } }
+    const b = s / n;
+    // temporal denoise in low light: blend with the previous frame (kills flicker/grain)
+    cur[y*CW+x] = low && cam.prev ? cam.prev[y*CW+x] + (b - cam.prev[y*CW+x]) * 0.65 : b;
+  }
+  if (!cam.prev) { cam.prev = new Float32Array(cur); cam.bg = new Float32Array(cur); return; }
+
+  // 2) motion + presence (background model with selective, slow update)
+  // threshold never drops below ~3x the measured sensor noise, so grain isn't read as motion
+  let noise = 0; for (let i = 0; i < CW*CH; i++) noise += Math.abs(cur[i] - cam.prev[i]); noise /= CW*CH;
+  if (cam.motionFrac < 0.02) cam.noise += (noise - cam.noise) * 0.05;
+  const thr = Math.max(42 - 34*state.camSens, cam.noise * 6);   // (motion uses thr/2)
+  let moving = 0, fg = 0;
+  for (let i = 0; i < CW*CH; i++) {
+    const d = Math.abs(cur[i] - cam.prev[i]);
+    const m = d > thr*0.5 ? 1 : 0; cam.motionMask[i] = m; moving += m;
+    const isFg = Math.abs(cur[i] - cam.bg[i]) > thr;
+    fg += isFg;
+    cam.bg[i] += (cur[i] - cam.bg[i]) * (isFg ? 0.0015 : 0.03);
+  }
+  cam.motionFrac = moving / (CW*CH); cam.fgFrac = fg / (CW*CH);
+
+  // 3) Lucas-Kanade optical flow per grid cell (px/frame), gated by motion
+  const cs = CW / GW, win = 3;
+  const P = cam.prev, C = cur;
+  for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+    const cx = Math.floor((gx+0.5)*cs), cy = Math.floor((gy+0.5)*cs);
+    let Ixx = 0, Iyy = 0, Ixy = 0, Ixt = 0, Iyt = 0, mot = 0;
+    for (let y = Math.max(1, cy-win); y <= Math.min(CH-2, cy+win); y++)
+      for (let x = Math.max(1, cx-win); x <= Math.min(CW-2, cx+win); x++) {
+        const i = y*CW + x;
+        const Ix = ((C[i+1]-C[i-1]) + (P[i+1]-P[i-1])) * 0.25;
+        const Iy = ((C[i+CW]-C[i-CW]) + (P[i+CW]-P[i-CW])) * 0.25;
+        const It = C[i] - P[i];
+        Ixx += Ix*Ix; Iyy += Iy*Iy; Ixy += Ix*Iy; Ixt += Ix*It; Iyt += Iy*It; mot += cam.motionMask[i];
+      }
+    let fx = 0, fy = 0;
+    const det = Ixx*Iyy - Ixy*Ixy;
+    if (mot >= 3 && det > 1e-2) {
+      fx = (-Iyy*Ixt + Ixy*Iyt) / det; fy = (Ixy*Ixt - Ixx*Iyt) / det;
+      const m = Math.hypot(fx, fy); if (m > 4) { fx *= 4/m; fy *= 4/m; }
+    }
+    const k = (gy*GW + gx)*2;
+    cam.flow[k]   += (fx - cam.flow[k])   * 0.6;       // temporal smoothing
+    cam.flow[k+1] += (fy - cam.flow[k+1]) * 0.6;
+  }
+  cam.prev.set(cur);
+  camPostAnalysis(now, dtF, v, vw, vh, low);
+}
+
+// Everything after the motion analysis. Shared by the built-in webcam path and the phone app,
+// whose phone-side analysis arrives as JSON (frame = its latest JPEG, for the hand model).
+function camPostAnalysis(now, dtF, v, vw, vh, low){
+  // 4) state machine: idle -> walking -> (still for N s) -> engaged (hands)
+  const present = cam.fgFrac > 0.025 || cam.handPts.length > 0 || (cam.phoneFaces || 0) > 0;
+  const walkingNow = cam.motionFrac > (cam.mode === 'engaged' ? 0.15 : 0.06);
+  if (!present && cam.motionFrac < 0.01) { cam.goneT += dtF; if (cam.goneT > 1) { cam.mode = 'idle'; cam.stillT = 0; } }
+  else cam.goneT = 0;
+  if (walkingNow) { cam.walkT += dtF; cam.stillT = 0; if (cam.mode !== 'engaged' || cam.walkT > 0.35) cam.mode = 'walking'; }
+  else {
+    cam.walkT = 0;
+    if (present) { cam.stillT += dtF; if (cam.stillT > state.camStill) cam.mode = 'engaged'; else if (cam.mode === 'idle') cam.mode = 'walking'; }
+  }
+
+  // 5) hands (only when someone is there)
+  cam.handPts = [];
+  if (cam.hands && state.camHands && cam.mode !== 'idle') {
+    try {
+      // low light: give the hand model a brightened copy of the frame
+      let src = v;
+      if (low && cam.gain > 1.15) {
+        if (!cam.handCanvas) { cam.handCanvas = document.createElement('canvas'); cam.handCtx = cam.handCanvas.getContext('2d'); }
+        const hw = Math.min(640, vw), hh = Math.round(hw * vh / vw);
+        if (cam.handCanvas.width !== hw) { cam.handCanvas.width = hw; cam.handCanvas.height = hh; }
+        cam.handCtx.filter = `brightness(${Math.min(3, cam.gain*0.8).toFixed(2)}) contrast(1.15)`;
+        cam.handCtx.drawImage(v, 0, 0, hw, hh);
+        src = cam.handCanvas;
+      }
+      const res = cam.hands.detectForVideo(src, now);
+      for (const lm of res.landmarks || []) {
+        // palm centre = mean of wrist + finger bases; steadier than a fingertip
+        const ids = [0, 5, 9, 13, 17]; let x = 0, y = 0;
+        for (const id of ids) { x += lm[id].x; y += lm[id].y; }
+        cam.handPts.push({x: x/ids.length, y: y/ids.length, lm});
+      }
+    } catch (err) { /* a dropped frame is fine */ }
+  }
+  const handModel = cam.hands && state.camHands;
+  if (cam.mode === 'engaged' && handModel) {
+    cam.bodyScale = 0.15;                               // the hands do the stirring now
+    // match detections to existing strokers (nearest neighbour), so each hand keeps its velocity
+    const used = new Set(), next = [];
+    for (const h of cam.handPts) {
+      const p = camToScreen(h.x, h.y);
+      let best = null, bd = 0.2;
+      cam.strokers.forEach((s, i) => { if (used.has(i)) return; const d = Math.hypot(s.last[0]-p[0], s.last[1]-p[1]); if (d < bd) { bd = d; best = i; } });
+      let st;
+      if (best !== null) { used.add(best); st = cam.strokers[best]; strokeTo(st, p, now, state.camHand, state.camHandSize); }
+      else st = {last: p, lastT: now, vel: [0, 0]};
+      next.push(st);
+    }
+    cam.strokers = next;
+  } else {
+    cam.strokers = [];
+    cam.bodyScale = cam.mode === 'idle' ? 0 : 1;        // no hand model -> hands show up as flow anyway
+  }
+
+  // 6) upload flow as texels/sec in screen orientation
+  if (sim) {
+    const kx = (sim.w / CW) * cam.fps, ky = (sim.h / CH) * cam.fps;
+    for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+      const s = (gy*GW + gx)*2;
+      const tx = state.camMirror ? GW-1-gx : gx;
+      const ty = state.camFlipY ? gy : GH-1-gy;          // image rows go down, texture rows go up
+      const d = (ty*GW + tx)*2;
+      cam.flowTexData[d]   = cam.flow[s]   * kx * (state.camMirror ? -1 : 1);
+      cam.flowTexData[d+1] = cam.flow[s+1] * ky * (state.camFlipY ? 1 : -1);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, cam.flowTex.t);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GW, GH, gl.RG, gl.FLOAT, cam.flowTexData);
+    cam.lastFlowT = now;
+  }
+
+  const hm = !state.camHands ? 'hand model off' : cam.handsStatus === 'ready' ? `${cam.handPts.length} hand(s)` :
+             cam.handsStatus === 'loading' ? 'loading hand model…' : 'no hand model (motion only)';
+  const label = {idle: 'Nobody there', walking: 'Someone passing', engaged: 'Engaged · hands'}[cam.mode] || cam.mode;
+  const ll = state.camLowLight ? ` · low light: gain ${cam.gain.toFixed(1)}×, noise ${cam.noise.toFixed(1)}${cam.tuning.length ? ', cam: ' + cam.tuning.join('/') : ''}` : '';
+  const ps = cam.source === 'phone' && cam.phoneStats;
+  const ph = ps ? ` · phone ${ps.fps.toFixed(0)} fps, exposure ${ps.expMs.toFixed(1)} ms, ISO ${ps.iso}, ${ps.locked ? 'exposure locked' : 'metering…'}${ps.faces ? ', faces ' + ps.faces : ''}` : '';
+  setCamStatus(`${label}${ph} · motion ${(cam.motionFrac*100).toFixed(1)}% · presence ${(cam.fgFrac*100).toFixed(0)}% · ${hm}${ll}`);
+  drawPreview();
+}
+
+function updateCamera(now){
+  if (!cam.stream) { cam.flowActive = false; return; }
+  if (cam.source !== 'phone') processCamera(now);
+  cam.flowActive = !!sim && cam.mode !== 'idle' && now - cam.lastFlowT < 400 && state.stirMode !== 'off';
+}
+
+// ---- preview: raw camera view, crop rectangle, motion, hands, state
+function drawPreview(){
+  const pc = document.getElementById('camPreview');
+  if (!pc) return;
+  const show = state.camPreview && cam.stream;
+  pc.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  const v = cam.source === 'phone' ? cam.phoneCanvas : cam.video, ctx = pc.getContext('2d');
+  const W = pc.width, H = pc.height;
+  ctx.drawImage(v, 0, 0, W, H);
+  const x0 = state.camLeft*W, y0 = state.camTop*H, x1 = state.camRight*W, y1 = state.camBottom*H;
+  // motion mask inside the crop
+  ctx.fillStyle = 'rgba(127,227,240,.55)';
+  const cw = (x1-x0)/CW, ch = (y1-y0)/CH;
+  for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++)
+    if (cam.motionMask[y*CW+x]) ctx.fillRect(x0 + x*cw, y0 + y*ch, cw+.5, ch+.5);
+  // flow arrows
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+    const k = (gy*GW+gx)*2, fx = cam.flow[k], fy = cam.flow[k+1];
+    if (Math.hypot(fx, fy) < 0.3) continue;
+    const cx = x0 + (gx+.5)*(x1-x0)/GW, cy = y0 + (gy+.5)*(y1-y0)/GH;
+    ctx.moveTo(cx, cy); ctx.lineTo(cx + fx*cw*3, cy + fy*ch*3);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = '#7fe3f0'; ctx.lineWidth = 2; ctx.strokeRect(x0, y0, x1-x0, y1-y0);
+  for (const h of cam.handPts) {
+    ctx.fillStyle = '#ffd36b'; ctx.beginPath(); ctx.arc(h.x*W, h.y*H, 6, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, 18);
+  ctx.fillStyle = '#fff'; ctx.font = '11px system-ui, sans-serif';
+  ctx.fillText(`camera · ${cam.mode}`, 6, 13);
+}
+
+const hex2rgb = h => { const n = parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; };
+
+/* ============================================================
+   SIZING
+   ============================================================ */
+let fixedSize = null; // [w,h] while recording at a set size
+// adaptive resolution: render fewer pixels when the device can't keep up (phones), never saved
+let autoScale = IS_TOUCH ? 0.75 : 1, slowWindows = 0;
+function resize(){
+  let w, h;
+  if (fixedSize) [w,h] = fixedSize;
+  else {
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5) * state.res * autoScale;
+    w = Math.max(1, Math.round(innerWidth * dpr)); h = Math.max(1, Math.round(innerHeight * dpr));
+  }
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+addEventListener('resize', resize);
+
+/* ============================================================
+   RENDER LOOP
+   ============================================================ */
+let phase = 0, playing = true, last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
+const phaseInput = document.getElementById('phase'), stat = document.getElementById('stat');
+let recorder = null, recStartPhaseAccum = 0, recAccum = 0;
+
+function draw(){
+  resize();
+  gl.useProgram(prog);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(U.uDisp, 0);
+  if (sim) { gl.bindTexture(gl.TEXTURE_2D, sim.disp.a.t); gl.uniform2f(U.uDispSize, sim.w, sim.h); }
+  gl.uniform1f(U.uStirOn, sim && (state.stirMode === 'ink' || state.stirMode === 'water') ? 1 : 0);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.uniform1i(U.uRip, 1);
+  if (sim) { gl.bindTexture(gl.TEXTURE_2D, sim.rip.a.t); gl.uniform2f(U.uRipSize, sim.w, sim.h); }
+  gl.uniform1f(U.uRipOn, sim && (state.stirMode === 'ripple' || state.stirMode === 'water') ? 1 : 0);
+  gl.activeTexture(gl.TEXTURE2);
+  gl.uniform1i(U.uPhi, 2);
+  if (sim) gl.bindTexture(gl.TEXTURE_2D, sim.phi.a.t);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uPhase, phase);
+  for (const p of PARAMS) if (U['u_'+p.key]) gl.uniform1f(U['u_'+p.key], state[p.key]);
+  for (const c of COLORS) gl.uniform3fv(U['u_'+c.key], hex2rgb(state[c.key]));
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function frame(now){
+  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  if (playing) {
+    const d = dt / state.duration;
+    phase = (phase + d) % 1;
+    if (recorder) { recAccum += d; if (recAccum >= 1) stopRecording(); }
+    phaseInput.value = phase;
+  }
+  resize();
+  updateCamera(now);
+  // the same strokes (mouse, tracked hands, camera) feed whichever simulations the mode uses
+  const splats = pointer.splats.splice(0, 400); pointer.splats.length = 0;
+  const mode = state.stirMode;
+  if (mode === 'water' || mode === 'ink') stepSim(dt, splats, mode === 'water');
+  if (mode === 'water' || mode === 'ripple') stepRipple(dt, splats, mode === 'water');
+  draw();
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc > 0.5) {
+    fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
+    if (!recorder && document.visibilityState === 'visible') {
+      slowWindows = fps < 40 ? slowWindows + 1 : 0;
+      if (slowWindows >= 2) { autoScale = Math.max(0.45, autoScale * 0.85); slowWindows = 0; }
+      else if (fps > 57 && autoScale < 1) autoScale = Math.min(1, autoScale * 1.05);
+    }
+  }
+  stat.textContent = recorder ? `REC ${Math.min(99,Math.floor(recAccum*100))}%` : `${fps.toFixed(0)} fps`;
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   DIAL (rotary knob) COMPONENT
+   ============================================================ */
+const A0 = Math.PI * 0.75, A1 = Math.PI * 2.25;
+const arc = (r, a0, a1) => {
+  const x0 = 26 + r*Math.cos(a0), y0 = 26 + r*Math.sin(a0), x1 = 26 + r*Math.cos(a1), y1 = 26 + r*Math.sin(a1);
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 ${a1-a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+};
+const knobs = {};
+const decimals = step => step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
+
+function makeKnob(def){
+  const el = document.createElement('div');
+  el.className = 'knob'; el.tabIndex = 0; el.title = `${def.label}: ${def.min} – ${def.max}`;
+  el.innerHTML = `<svg viewBox="0 0 52 52">
+      <path class="track" d="${arc(21, A0, A1)}"/><path class="val"/>
+      <circle class="cap" cx="26" cy="26" r="14"/><line class="tick" x1="26" y1="26"/>
+    </svg><div class="kv"></div><div class="kl">${def.label}</div>`;
+  const val = el.querySelector('.val'), tick = el.querySelector('.tick'), kv = el.querySelector('.kv');
+  const range = def.max - def.min;
+
+  function render(){
+    const v = state[def.key], t = (v - def.min) / range, a = A0 + t*(A1 - A0);
+    val.setAttribute('d', arc(21, A0, Math.max(a, A0 + 0.0001)));
+    tick.setAttribute('x2', (26 + 11*Math.cos(a)).toFixed(2));
+    tick.setAttribute('y2', (26 + 11*Math.sin(a)).toFixed(2));
+    kv.textContent = v.toFixed(decimals(def.step));
+  }
+  function set(v){
+    v = Math.min(def.max, Math.max(def.min, v));
+    v = Math.round((v - def.min) / def.step) * def.step + def.min;
+    v = +v.toFixed(5);
+    if (v === state[def.key]) return;
+    state[def.key] = v; render(); onChange(def.key);
+  }
+  let drag = null;
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); drag = {x:e.clientX, y:e.clientY, v:state[def.key]}; el.focus(); });
+  el.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const d = (drag.y - e.clientY) + (e.clientX - drag.x);
+    set(drag.v + d / (e.shiftKey ? 900 : 180) * range);
+  });
+  const end = () => drag = null;
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('dblclick', () => set(def.def));
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    const inc = Math.max(def.step, range / 100) * (e.shiftKey ? 0.1 : 1);
+    set(state[def.key] - Math.sign(e.deltaY) * Math.max(inc, def.step));
+  }, {passive:false});
+  el.addEventListener('keydown', e => {
+    const inc = Math.max(def.step, range / 100) * (e.shiftKey ? 0.1 : 1);
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { set(state[def.key] + Math.max(inc, def.step)); e.preventDefault(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { set(state[def.key] - Math.max(inc, def.step)); e.preventDefault(); }
+  });
+  knobs[def.key] = {render};
+  render();
+  return el;
+}
+
+/* ============================================================
+   BUILD PANEL
+   ============================================================ */
+const sectionsEl = document.getElementById('sections');
+const sectionGrids = {};
+function section(name, open = true){
+  const d = document.createElement('details'); d.open = open;
+  d.innerHTML = `<summary>${name}</summary>`;
+  sectionsEl.appendChild(d); return d;
+}
+// Colors first
+const colDet = section('Colors');
+const grad = document.createElement('div'); grad.id = 'gradPreview';
+const swWrap = document.createElement('div'); swWrap.className = 'swatches';
+const colorInputs = {};
+COLORS.forEach(c => {
+  const w = document.createElement('label'); w.className = 'sw';
+  w.innerHTML = `<input type="color"><span>${c.label}</span>`;
+  const inp = w.querySelector('input'); inp.value = state[c.key];
+  inp.addEventListener('input', () => { state[c.key] = inp.value; onChange(c.key); });
+  colorInputs[c.key] = inp; swWrap.appendChild(w);
+});
+const colRow = document.createElement('div'); colRow.className = 'row'; colRow.style.padding = '0 2px 10px';
+colRow.innerHTML = `<button id="swapDepth">Swap deep/shallow</button><button id="randPal">Random palette</button>`;
+colDet.append(swWrap, grad, colRow);
+
+PARAMS.forEach(p => {
+  if (!sectionGrids[p.section]) {
+    const d = section(p.section, p.section !== 'Finish');
+    const g = document.createElement('div'); g.className = 'grid'; d.appendChild(g);
+    sectionGrids[p.section] = g;
+  }
+  sectionGrids[p.section].appendChild(makeKnob(p));
+});
+
+// stir on/off + settle, under the Stir dials
+const stirRow = document.createElement('div'); stirRow.className = 'row'; stirRow.style.padding = '0 2px 10px';
+stirRow.innerHTML = `<select id="stirMode" title="Click-drag on the water to stir it">
+    <option value="water">Hand in water (waves + flow)</option>
+    <option value="ripple">Ripples only (click = drop, drag = wake)</option>
+    <option value="ink">Ink stir (swirl the pattern)</option>
+    <option value="off">Interaction off</option>
+  </select><button id="stirClear">Settle</button>`;
+sectionGrids['Stir'].after(stirRow);
+const stirModeSel = stirRow.querySelector('#stirMode');
+stirModeSel.value = state.stirMode;
+stirModeSel.addEventListener('change', () => { state.stirMode = stirModeSel.value; if (state.stirMode === 'off') clearStir(); save(); });
+stirRow.querySelector('#stirClear').onclick = clearStir;
+// camera controls, above the Camera dials
+const camCtl = document.createElement('div'); camCtl.className = 'camCtl';
+camCtl.innerHTML = `
+  <div class="row"><select id="camSelect" title="Camera used for detection"><option value="">Default camera</option></select>
+    <button id="camRefresh" title="Refresh camera list">↻</button></div>
+  <div class="row"><button id="camToggle" class="primary">● Start camera</button></div>
+  <div class="row">
+    <label><input type="checkbox" id="camMirror"> Mirror</label>
+    <label><input type="checkbox" id="camFlipY"> Flip vertical</label>
+    <label><input type="checkbox" id="camHands"> Hand tracking</label>
+    <label><input type="checkbox" id="camPreviewChk"> Preview</label>
+    <label title="Longer exposure, auto gain, noise reduction"><input type="checkbox" id="camLowLightChk"> Low-light mode</label>
+  </div>
+  <div class="row" id="phoneRow" style="display:none">
+    <button id="phoneRelock" title="Re-measure exposure for the current room light, then lock it">Re-meter exposure</button>
+    <button id="phoneNext" title="Cycle through the phone's cameras">Next phone camera</button>
+  </div>
+  <div id="camStatus">Camera off</div>`;
+sectionGrids['Camera'].before(camCtl);
+const camChecks = {camMirror: 'camMirror', camFlipY: 'camFlipY', camHands: 'camHands', camPreview: 'camPreviewChk', camLowLight: 'camLowLightChk'};
+for (const [key, id] of Object.entries(camChecks)) {
+  const el = camCtl.querySelector('#' + id); el.checked = !!state[key];
+  el.addEventListener('change', () => { state[key] = el.checked; save(); if (key === 'camHands' && el.checked && cam.stream) loadHandModel(); if (key === 'camLowLight' && cam.stream) { if (cam.source === 'phone') phoneSync('camLowLight'); else startCamera(); } drawPreview(); });
+}
+camCtl.querySelector('#camSelect').addEventListener('change', e => { state.camDevice = e.target.value; save(); if (cam.stream) startCamera(); });
+camCtl.querySelector('#camRefresh').onclick = listCameras;
+camCtl.querySelector('#phoneRelock').onclick = () => phoneSend({cmd: 'relock'});
+camCtl.querySelector('#phoneNext').onclick = () => phoneSend({cmd: 'nextCamera'});
+camCtl.querySelector('#camToggle').onclick = () => cam.stream ? stopCamera() : startCamera();
+navigator.mediaDevices?.addEventListener?.('devicechange', listCameras);
+if (!fluidOK) { stirModeSel.disabled = true; stirModeSel.title = 'Needs float render targets (not available on this device)'; }
+
+function updateGradient(){
+  const cs = ['deep','shallow','glowColor','caustic'].map(k => state[k]);
+  grad.style.background = `linear-gradient(90deg, ${cs.join(',')})`;
+}
+function syncUI(){
+  Object.values(knobs).forEach(k => k.render());
+  COLORS.forEach(c => colorInputs[c.key].value = state[c.key]);
+  stirModeSel.value = state.stirMode;
+  for (const [key, id] of Object.entries(camChecks)) document.getElementById(id).checked = !!state[key];
+  updateGradient();
+}
+function onChange(key){ updateGradient(); save(); if (key && key.startsWith('cam')) phoneSync(key); }
+
+/* ============================================================
+   PRESETS / RANDOM / IO
+   ============================================================ */
+const presetSel = document.getElementById('preset');
+presetSel.innerHTML = `<option value="">Presets…</option>` + Object.keys(PRESETS).map(n => `<option>${n}</option>`).join('');
+presetSel.addEventListener('change', () => {
+  if (!presetSel.value) return;
+  const keepRes = state.res, keepDur = state.duration;
+  state = {...defaults, ...PRESETS[presetSel.value], res: keepRes, duration: keepDur, ...camKeys()};
+  syncUI(); save(); presetSel.value = '';
+});
+
+const hsl = (h, s, l) => {
+  s /= 100; l /= 100;
+  const k = n => (n + h/30) % 12, a = s*Math.min(l, 1-l);
+  const f = n => l - a*Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  return '#' + [f(0),f(8),f(4)].map(x => Math.round(x*255).toString(16).padStart(2,'0')).join('');
+};
+const rnd = (a, b) => a + Math.random()*(b - a);
+function randomPalette(){
+  const base = Math.random()*360, warm = Math.random() < .3;
+  state.deep       = hsl(base, rnd(55,90), rnd(3,12));
+  state.shallow    = hsl((base + rnd(-25,25) + 360) % 360, rnd(45,85), rnd(22,45));
+  state.caustic    = hsl((base + (warm ? 180 + rnd(-40,40) : rnd(-30,30)) + 360) % 360, rnd(30,100), rnd(78,95));
+  state.glowColor  = hsl((base + rnd(-70,70) + 360) % 360, rnd(70,100), rnd(48,65));
+  state.groutColor = Math.random() < .5 ? hsl(base, rnd(10,30), rnd(80,95)) : hsl(base, rnd(40,70), rnd(8,20));
+  state.highlight  = hsl(base, rnd(0,30), rnd(90,100));
+}
+function randomize(){
+  const r = (k, a, b) => { const p = PARAMS.find(x => x.key === k); let v = rnd(a, b); state[k] = +(Math.round(v/p.step)*p.step).toFixed(5); };
+  r('scale',1.5,6); r('jitter',.4,1); r('layer',0,.9); r('seed',0,99);
+  state.model = Math.random() < .35 ? 0 : Math.random() < .5 ? 1 : +rnd(.2,.8).toFixed(2);
+  r('waves',8,28.49); r('focus',.6,2.2); r('chop',.3,.8); r('wind',0,360); r('spread',.2,1);
+  r('warp',0,1.6); r('warpScale',.4,2); r('width',.02,.15); r('sharp',1,4);
+  r('intensity',.8,1.8); r('glow',.1,.9); r('disp',0,.7); r('shadow',.2,.7);
+  r('flow',.3,1.4); r('cycles',1,3.49); r('patches',0,.7); r('sand',0,.6);
+  randomPalette(); syncUI(); save();
+}
+document.getElementById('randomize').onclick = randomize;
+document.getElementById('reset').onclick = () => { const c = camKeys(); state = {...defaults, camOn: c.camOn, camDevice: c.camDevice}; syncUI(); save(); };
+document.getElementById('randPal').onclick = () => { randomPalette(); syncUI(); save(); };
+document.getElementById('swapDepth').onclick = () => { [state.deep, state.shallow] = [state.shallow, state.deep]; syncUI(); save(); };
+document.getElementById('copy').onclick = async () => {
+  const txt = JSON.stringify(state, null, 1);
+  try { await navigator.clipboard.writeText(txt); flash('copy','Copied'); } catch { prompt('Settings JSON:', txt); }
+};
+document.getElementById('paste').onclick = () => {
+  const t = prompt('Paste settings JSON:'); if (!t) return;
+  try { state = {...defaults, ...JSON.parse(t), ...camKeys()}; syncUI(); save(); } catch { alert('Invalid JSON'); }
+};
+function flash(id, text){ const b = document.getElementById(id), o = b.textContent; b.textContent = text; setTimeout(() => b.textContent = o, 900); }
+
+/* ============================================================
+   TRANSPORT / EXPORT
+   ============================================================ */
+const playBtn = document.getElementById('play');
+const setPlaying = v => { playing = v; playBtn.textContent = v ? '❚❚' : '▶'; };
+playBtn.onclick = () => setPlaying(!playing);
+phaseInput.addEventListener('input', () => { phase = +phaseInput.value; setPlaying(false); });
+
+document.getElementById('png').onclick = () => {
+  draw();
+  canvas.toBlob(b => download(b, `caustics-${Date.now()}.png`), 'image/png');
+};
+function download(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+const recBtn = document.getElementById('rec');
+let chunks = [], recMime = '';
+recBtn.onclick = () => recorder ? stopRecording(true) : startRecording();
+function startRecording(){
+  if (!window.MediaRecorder) { alert('MediaRecorder is not supported here.'); return; }
+  const sz = document.getElementById('recSize').value;
+  fixedSize = sz === 'window' ? null : sz.split('x').map(Number);
+  resize();
+  recMime = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const stream = canvas.captureStream(60);
+  recorder = new MediaRecorder(stream, {mimeType: recMime, videoBitsPerSecond: 24e6});
+  chunks = [];
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    const ext = recMime.includes('mp4') ? 'mp4' : 'webm';
+    download(new Blob(chunks, {type: recMime || 'video/webm'}), `caustics-loop-${Date.now()}.${ext}`);
+  };
+  phase = 0; recAccum = 0; setPlaying(true);
+  recorder.start();
+  recBtn.textContent = '■ Stop'; recBtn.className = 'rec';
+}
+function stopRecording(){
+  if (!recorder) return;
+  recorder.stop(); recorder = null; fixedSize = null; resize();
+  recBtn.textContent = '● Record loop'; recBtn.className = 'primary';
+}
+
+/* ============================================================
+   PANEL TOGGLE + KEYS
+   ============================================================ */
+const panel = document.getElementById('panel');
+const togglePanel = () => panel.classList.toggle('hidden');
+
+// fullscreen (with the webkit-prefixed API for Safari)
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+function toggleFullscreen(){
+  const root = document.documentElement;
+  try {
+    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else {
+      const r = (root.requestFullscreen || root.webkitRequestFullscreen).call(root, {navigationUI: 'hide'});
+      if (r && r.catch) r.catch(err => console.warn('Fullscreen request was refused:', err.message));
+    }
+  } catch (err) { console.warn('Fullscreen unavailable:', err); }
+}
+function syncFsButtons(){
+  const on = !!fsElement();
+  document.getElementById('fs').textContent = on ? '⛶ Exit fullscreen' : '⛶ Fullscreen';
+  document.getElementById('fsFloat').title = on ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
+  resize();
+}
+document.getElementById('fs').onclick = toggleFullscreen;
+document.getElementById('fsFloat').onclick = toggleFullscreen;
+document.addEventListener('fullscreenchange', syncFsButtons);
+document.addEventListener('webkitfullscreenchange', syncFsButtons);
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen))
+  document.querySelectorAll('.fsBtn').forEach(b => b.style.display = 'none');
+document.getElementById('hide').onclick = togglePanel;
+document.getElementById('toggle').onclick = togglePanel;
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  if (e.key === 'h' || e.key === 'H') togglePanel();
+  else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  else if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === 'r' || e.key === 'R') randomize();
+});
+
+if (IS_TOUCH && Math.min(innerWidth, innerHeight) < 700) panel.classList.add('hidden');   // phones: start on the art, ☰ opens controls
+resize();
+makeSim(canvas.width / canvas.height);
+listCameras().then(() => { if (state.camOn) startCamera(); });
+updateGradient();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
